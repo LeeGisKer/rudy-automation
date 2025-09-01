@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: automation-dashboard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: automation-dashboard
+  template:
+    metadata:
+      labels:
+        app: automation-dashboard
+    spec:
+      containers:
+      - name: dashboard
+        image: your-docker-repo/automation-dashboard:latest
+        ports:
+        - containerPort: 5000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: automation-dashboard
+spec:
+  selector:
+    app: automation-dashboard
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 5000
+  type: LoadBalancer
