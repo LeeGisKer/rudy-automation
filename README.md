@@ -7,7 +7,12 @@ This repository provides scripts, templates, and a minimal dashboard for digitiz
 - `src/ocr/job_assigner.py` – Command‑line helper to tag receipt line items with job IDs and save a new CSV.
 - `src/dashboard/app.py` – Flask web dashboard for uploading receipts and viewing stored files.
 - `excel_templates/` – CSV templates for fuel logs and job quotes that can be opened in Excel or Google Sheets.
+- `Dockerfile` – Builds a container image based on `python:3.11.9-slim-bullseye` with Tesseract and the project scripts.
+- `k8s/deployment.yaml` – Example Kubernetes deployment and service for the dashboard.
 
+## Branches
+- `development` – active branch where all ongoing work is merged.
+- `main` – stable branch kept in sync with `development`.
 
 ## Setup
 1. Install [Tesseract OCR](https://tesseract-ocr.github.io/) and ensure the `tesseract` command is available.
@@ -38,7 +43,21 @@ python src/dashboard/app.py
 ```
 Open <http://localhost:5000> in your browser and use the form to upload receipts.
 
+### Run with Docker
+Build a container image and launch the dashboard:
+```bash
+docker build -t automation-dashboard .
+docker run -p 5000:5000 automation-dashboard
+```
 
+### Deploy to Kubernetes
+Push the built image to a registry and update `k8s/deployment.yaml` with that image name. Deploy the resources:
+
+```bash
+kubectl apply -f k8s/deployment.yaml
+```
+
+The service exposes the dashboard on port 80 and forwards traffic to the Flask app on port 5000.
 
 ### Fuel logs and quotes
 Duplicate the CSV templates in `excel_templates/` to track fuel expenses and generate job quotes in Excel or Google Sheets.
