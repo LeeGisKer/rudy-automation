@@ -8,9 +8,15 @@ import json
 from PIL import Image
 import pytesseract
 
+
 def extract_receipt(image_path: str) -> dict:
-    """Extract text from receipt image and return basic structured data."""
-    text = pytesseract.image_to_string(Image.open(image_path))
+    """Extract text from a receipt image and return structured data."""
+    try:
+        with Image.open(image_path) as img:
+            text = pytesseract.image_to_string(img)
+    except (OSError, FileNotFoundError) as exc:
+        return {"error": str(exc)}
+
     # Placeholder parsing logic; would parse line items here
     return {"raw_text": text}
 
@@ -18,7 +24,7 @@ def extract_receipt(image_path: str) -> dict:
 def main(paths):
     for img in paths:
         data = extract_receipt(img)
-        out_path = Path(img).with_suffix('.json')
+        out_path = Path(img).with_suffix(".json")
         out_path.write_text(json.dumps(data, indent=2))
         print(f"Written {out_path}")
 
