@@ -8,6 +8,7 @@ This repository provides scripts, templates, and a minimal dashboard for digitiz
 - `src/dashboard/app.py` – Flask web dashboard for uploading receipts and viewing stored files.
 - `excel_templates/` – CSV templates for fuel logs and job quotes that can be opened in Excel or Google Sheets.
 
+
 ## Setup
 1. Install [Tesseract OCR](https://tesseract-ocr.github.io/) and ensure the `tesseract` command is available.
 2. Install Python dependencies:
@@ -36,6 +37,7 @@ Start the Flask application to upload and review receipt files:
 python src/dashboard/app.py
 ```
 Open <http://localhost:5000> in your browser and use the form to upload receipts.
+
 
 ### Fuel logs and quotes
 Duplicate the CSV templates in `excel_templates/` to track fuel expenses and generate job quotes in Excel or Google Sheets.
