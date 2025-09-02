@@ -21,6 +21,7 @@ def index():
         entries.append({"name": f.name, "data": data})
     return render_template('index.html', files=entries)
 
+
 @app.route('/upload', methods=['POST'])
 def upload():
     file = request.files['receipt']
