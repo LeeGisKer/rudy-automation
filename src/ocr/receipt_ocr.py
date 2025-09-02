@@ -10,12 +10,14 @@ import pytesseract
 from pytesseract import TesseractError, TesseractNotFoundError
 
 
+
 def extract_receipt(image_path: str) -> dict:
     """Extract text from receipt image and return basic structured data.
 
     The image is converted to grayscale and scaled down so that OCR runs
     efficiently on resource-constrained hardware like a Raspberry Pi.
     """
+
     try:
         with Image.open(image_path) as img:
             img = img.convert("L")
@@ -28,6 +30,8 @@ def extract_receipt(image_path: str) -> dict:
         return {"raw_text": f"Image error: {exc}"}
     except (TesseractNotFoundError, TesseractError) as exc:
         return {"raw_text": f"OCR error: {exc}"}
+
+
 
 
 def main(paths):

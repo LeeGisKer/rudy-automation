@@ -1,6 +1,7 @@
 """Minimal Flask dashboard for uploading receipts and viewing costs."""
 from flask import Flask, render_template, request, redirect
 from werkzeug.utils import secure_filename
+
 from pathlib import Path
 
 import sys
@@ -18,6 +19,7 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 def index():
     entries = []
     for f in UPLOAD_DIR.glob('*'):
+
         if f.is_file():
             data = extract_receipt(f)
             entries.append({"name": f.name, "data": data})
@@ -31,7 +33,7 @@ def upload():
         return redirect('/')
     dest = UPLOAD_DIR / secure_filename(file.filename)
     file.save(dest)
-    return redirect('/')
+
 
 if __name__ == '__main__':
     # Disable debug mode and reloader for lower resource use on small devices
