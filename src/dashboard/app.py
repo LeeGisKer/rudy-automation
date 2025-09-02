@@ -1,9 +1,8 @@
 """Minimal Flask dashboard for uploading receipts and viewing costs."""
 from flask import Flask, render_template, request, redirect
 from werkzeug.utils import secure_filename
-
+import json
 from pathlib import Path
-
 import sys
 
 # Allow importing modules from the parent src directory
@@ -12,17 +11,18 @@ from ocr.receipt_ocr import extract_receipt
 
 app = Flask(__name__)
 UPLOAD_DIR = Path('uploads')
-UPLOAD_DIR.mkdir(exist_ok=True)
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
 @app.route('/')
 def index():
     entries = []
-    for f in UPLOAD_DIR.glob('*'):
-
-        if f.is_file():
-            data = extract_receipt(f)
-            entries.append({"name": f.name, "data": data})
+    for f in UPLOAD_DIR.glob('*.json'):
+        try:
+            data = json.loads(f.read_text())
+        except json.JSONDecodeError as exc:
+            data = {"raw_text": f"JSON error: {exc}"}
+        entries.append({"name": f.stem, "data": data})
     return render_template('index.html', files=entries)
 
 
@@ -33,6 +33,9 @@ def upload():
         return redirect('/')
     dest = UPLOAD_DIR / secure_filename(file.filename)
     file.save(dest)
+    data = extract_receipt(dest)
+    (dest.with_suffix('.json')).write_text(json.dumps(data, indent=2))
+    return redirect('/')
 
 
 if __name__ == '__main__':
