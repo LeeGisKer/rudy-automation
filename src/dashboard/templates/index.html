@@ -11,10 +11,8 @@
       <input type="file" name="receipt" required>
       <button class="btn btn-primary" type="submit">Upload</button>
     </form>
-    <ul>
     {% for f in files %}
-      <li><a href="{{ url_for('classify', filename=f) }}">{{ f }}</a></li>
+
     {% endfor %}
-    </ul>
   </body>
 </html>

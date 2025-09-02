@@ -42,6 +42,7 @@ Start the Flask application to upload and review receipt files:
 python src/dashboard/app.py
 ```
 Open <http://localhost:5000> in your browser and use the form to upload receipts.
+Uploaded files appear below the form with the text that Tesseract extracted so you can verify the classification.
 
 ### Run with Docker
 Build a container image and launch the dashboard:
@@ -111,6 +112,7 @@ Inicia la aplicación Flask para subir y revisar archivos de recibos:
 python src/dashboard/app.py
 ```
 Abre <http://localhost:5000> en tu navegador y usa el formulario para subir recibos.
+
 
 ### Ejecutar con Docker
 Construye una imagen de contenedor y lanza el panel:

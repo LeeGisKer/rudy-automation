@@ -1,5 +1,5 @@
 """Minimal Flask dashboard for uploading receipts and viewing costs."""
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect
 from pathlib import Path
 
 import sys
@@ -15,8 +15,12 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 
 @app.route('/')
 def index():
-    files = [f.name for f in UPLOAD_DIR.glob('*')]
-    return render_template('index.html', files=files)
+    entries = []
+    for f in UPLOAD_DIR.glob('*'):
+        data = extract_receipt(f)
+        entries.append({"name": f.name, "data": data})
+    return render_template('index.html', files=entries)
+
 
 
 @app.route('/upload', methods=['POST'])
@@ -24,14 +28,6 @@ def upload():
     file = request.files['receipt']
     dest = UPLOAD_DIR / file.filename
     file.save(dest)
-    return redirect(url_for('classify', filename=file.filename))
-
-
-@app.route('/classify/<filename>')
-def classify(filename: str):
-    """Run OCR on the uploaded file and display the result."""
-    data = extract_receipt(UPLOAD_DIR / filename)
-    return render_template('classify.html', file=filename, data=data)
 
 
 if __name__ == '__main__':
