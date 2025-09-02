@@ -19,4 +19,5 @@ def upload():
     return redirect(url_for('index'))
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    # Disable debug mode and reloader for lower resource use on small devices
+    app.run(host='0.0.0.0', use_reloader=False)
