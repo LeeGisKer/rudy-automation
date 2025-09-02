@@ -113,11 +113,6 @@ python src/dashboard/app.py
 ```
 Abre <http://localhost:5000> en tu navegador y usa el formulario para subir recibos.
 
-Los archivos subidos aparecen debajo del formulario con el texto que Tesseract extrajo para que puedas verificar la clasificación.
-
-
-
-
 ### Ejecutar con Docker
 Construye una imagen de contenedor y lanza el panel:
 ```bash

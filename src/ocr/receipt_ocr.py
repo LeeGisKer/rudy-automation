@@ -31,14 +31,6 @@ def extract_receipt(image_path: str) -> dict:
     except (TesseractNotFoundError, TesseractError) as exc:
         return {"raw_text": f"OCR error: {exc}"}
 
-    with Image.open(image_path) as img:
-        img = img.convert("L")
-        img.thumbnail((2000, 2000))
-        text = pytesseract.image_to_string(
-            img, lang="eng", config="--psm 6"
-        )
-    # Placeholder parsing logic; would parse line items here
-    return {"raw_text": text}
 
 
 
