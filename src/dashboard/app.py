@@ -21,14 +21,12 @@ def index():
         entries.append({"name": f.name, "data": data})
     return render_template('index.html', files=entries)
 
-
 @app.route('/upload', methods=['POST'])
 def upload():
     file = request.files['receipt']
     dest = UPLOAD_DIR / file.filename
     file.save(dest)
     return redirect('/')
-
 
 if __name__ == '__main__':
     # Disable debug mode and reloader for lower resource use on small devices
