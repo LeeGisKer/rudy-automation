@@ -11,10 +11,11 @@
       <input type="file" name="receipt" required>
       <button class="btn btn-primary" type="submit">Upload</button>
     </form>
-    <ul>
     {% for f in files %}
-      <li>{{ f }}</li>
+      <div class="mb-4">
+        <h2>{{ f.name }}</h2>
+        <pre>{{ f.data.raw_text }}</pre>
+      </div>
     {% endfor %}
-    </ul>
   </body>
 </html>
