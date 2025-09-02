@@ -8,9 +8,19 @@ import json
 from PIL import Image
 import pytesseract
 
+
 def extract_receipt(image_path: str) -> dict:
-    """Extract text from receipt image and return basic structured data."""
-    text = pytesseract.image_to_string(Image.open(image_path))
+    """Extract text from receipt image and return basic structured data.
+
+    The image is converted to grayscale and scaled down so that OCR runs
+    efficiently on resource-constrained hardware like a Raspberry Pi.
+    """
+    with Image.open(image_path) as img:
+        img = img.convert("L")
+        img.thumbnail((2000, 2000))
+        text = pytesseract.image_to_string(
+            img, lang="eng", config="--psm 6"
+        )
     # Placeholder parsing logic; would parse line items here
     return {"raw_text": text}
 
