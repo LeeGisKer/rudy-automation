@@ -3,7 +3,7 @@ from flask import Flask, render_template, request, redirect
 from werkzeug.utils import secure_filename
 import json
 from pathlib import Path
-from uuid import uuid4
+
 import sys
 
 # Allow importing modules from the parent src directory
@@ -23,8 +23,7 @@ def index():
             data = json.loads(f.read_text())
         except json.JSONDecodeError as exc:
             data = {"raw_text": f"JSON error: {exc}"}
-        name = data.get("original_name", f.stem)
-        entries.append({"name": name, "data": data})
+
     return render_template('index.html', files=entries)
 
 
@@ -37,8 +36,7 @@ def upload():
     dest = UPLOAD_DIR / f"{uuid4().hex}_{filename}"
     file.save(dest)
     data = extract_receipt(dest)
-    out = {"original_name": filename, **data}
-    (dest.with_suffix('.json')).write_text(json.dumps(out, indent=2))
+
     return redirect('/')
 
 
