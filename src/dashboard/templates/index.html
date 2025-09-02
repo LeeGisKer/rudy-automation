@@ -13,6 +13,13 @@
     </form>
     {% for f in files %}
 
+      <div class="mb-4">
+        <h2>{{ f.name }}</h2>
+        <pre>{{ f.data.raw_text }}</pre>
+      </div>
+
+
+
     {% endfor %}
   </body>
 </html>

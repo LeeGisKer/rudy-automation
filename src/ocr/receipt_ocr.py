@@ -5,8 +5,10 @@ Outputs JSON file with parsed data.
 from pathlib import Path
 import json
 
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 import pytesseract
+from pytesseract import TesseractError, TesseractNotFoundError
+
 
 
 def extract_receipt(image_path: str) -> dict:
@@ -15,6 +17,20 @@ def extract_receipt(image_path: str) -> dict:
     The image is converted to grayscale and scaled down so that OCR runs
     efficiently on resource-constrained hardware like a Raspberry Pi.
     """
+
+    try:
+        with Image.open(image_path) as img:
+            img = img.convert("L")
+            img.thumbnail((2000, 2000))
+            text = pytesseract.image_to_string(
+                img, lang="eng", config="--psm 6"
+            )
+        return {"raw_text": text}
+    except (UnidentifiedImageError, OSError) as exc:
+        return {"raw_text": f"Image error: {exc}"}
+    except (TesseractNotFoundError, TesseractError) as exc:
+        return {"raw_text": f"OCR error: {exc}"}
+
     with Image.open(image_path) as img:
         img = img.convert("L")
         img.thumbnail((2000, 2000))
@@ -23,6 +39,7 @@ def extract_receipt(image_path: str) -> dict:
         )
     # Placeholder parsing logic; would parse line items here
     return {"raw_text": text}
+
 
 
 def main(paths):
