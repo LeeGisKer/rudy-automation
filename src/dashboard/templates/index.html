@@ -13,7 +13,7 @@
     </form>
     <ul>
     {% for f in files %}
-      <li>{{ f }}</li>
+      <li><a href="{{ url_for('classify', filename=f) }}">{{ f }}</a></li>
     {% endfor %}
     </ul>
   </body>
