@@ -6,18 +6,47 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
   </head>
   <body class="p-4">
+    {% if any_processing %}<meta http-equiv="refresh" content="5">{% endif %}
     <h1>Receipts</h1>
     <form action="/upload" method="post" enctype="multipart/form-data" class="mb-3">
-      <input type="file" name="receipt" required>
+      <input type="file" name="receipt" required multiple>
       <button class="btn btn-primary" type="submit">Upload</button>
     </form>
     {% for f in files %}
 
       <div class="mb-4">
         <h2>{{ f.name }}</h2>
+        {% if f.data.status == 'processing' %}
+          <div class="text-muted">Processing...</div>
+        {% endif %}
         <p>Job Name: {{ f.data.job_name or 'N/A' }}</p>
-        <p>Total: {{ f.data.total or 'N/A' }}</p>
-        <pre>{{ f.data.raw_text }}</pre>
+        <p>Total: {{ f.data.total if f.data.total is not none else 'N/A' }}</p>
+        {% set needs_fix = (not f.data.job_name) or (f.data.total is none) %}
+        {% if needs_fix %}
+          <div class="alert alert-warning p-2 mt-2">
+            <div class="d-flex justify-content-between align-items-center">
+              <div><strong>Missing data.</strong> Provide Job Name and/or Total.</div>
+              <a class="btn btn-link btn-sm" href="{{ url_for('classify', name=f.name) }}">Open full form</a>
+            </div>
+            <form class="row g-2 mt-1" method="post" action="{{ url_for('classify', name=f.name) }}">
+              <div class="col-sm-5">
+                <input class="form-control form-control-sm" name="job_name" placeholder="Job name" value="{{ f.data.job_name or '' }}">
+              </div>
+              <div class="col-sm-3">
+                <input class="form-control form-control-sm" name="total" placeholder="Total (e.g., 49.47)" value="{{ f.data.total if f.data.total is not none else '' }}">
+              </div>
+              <div class="col-sm-2">
+                <button class="btn btn-primary btn-sm w-100" type="submit">Save</button>
+              </div>
+            </form>
+          </div>
+        {% endif %}
+        {% if f.data.raw_text %}
+        <details>
+          <summary>Show OCR text</summary>
+          <pre style="white-space: pre-wrap">{{ f.data.raw_text }}</pre>
+        </details>
+        {% endif %}
       </div>
 
     {% endfor %}

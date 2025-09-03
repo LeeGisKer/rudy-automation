@@ -7,7 +7,20 @@
   </head>
   <body class="p-4">
     <h1>Classification for {{ file }}</h1>
-    <pre>{{ data.raw_text }}</pre>
-    <a href="{{ url_for('index') }}">Back to receipts</a>
+    <form method="post" class="mb-3">
+      <div class="mb-3">
+        <label class="form-label">Job Name</label>
+        <input class="form-control" type="text" name="job_name" value="{{ data.job_name or '' }}" placeholder="Enter job name">
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Total</label>
+        <input class="form-control" type="text" name="total" value="{{ data.total if data.total is not none else '' }}" placeholder="e.g., 49.47">
+        <div class="form-text">Use numbers only; commas allowed.</div>
+      </div>
+      <button class="btn btn-primary" type="submit">Save</button>
+      <a class="btn btn-secondary" href="{{ url_for('index') }}">Cancel</a>
+    </form>
+    <h6>OCR text</h6>
+    <pre style="white-space: pre-wrap">{{ data.raw_text }}</pre>
   </body>
 </html>
