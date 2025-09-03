@@ -11,7 +11,9 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 from ocr.receipt_ocr import extract_receipt
 
 app = Flask(__name__)
-UPLOAD_DIR = Path('uploads')
+# Store uploads within the dashboard package directory to avoid permission issues
+BASE_DIR = Path(__file__).resolve().parent
+UPLOAD_DIR = BASE_DIR / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
