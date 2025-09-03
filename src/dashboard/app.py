@@ -11,9 +11,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 from ocr.receipt_ocr import extract_receipt
 
 app = Flask(__name__)
-# Store uploads within the dashboard package directory to avoid permission issues
-BASE_DIR = Path(__file__).resolve().parent
-UPLOAD_DIR = BASE_DIR / "uploads"
+
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -25,8 +23,7 @@ def index():
             data = json.loads(f.read_text())
         except json.JSONDecodeError as exc:
             data = {"raw_text": f"JSON error: {exc}"}
-        name = data.get("original_name", f.stem)
-        entries.append({"name": name, "data": data})
+
     return render_template('index.html', files=entries)
 
 
@@ -39,8 +36,7 @@ def upload():
     dest = UPLOAD_DIR / f"{uuid4().hex}_{filename}"
     file.save(dest)
     data = extract_receipt(dest)
-    out = {"original_name": filename, **data}
-    (dest.with_suffix('.json')).write_text(json.dumps(out, indent=2))
+
     return redirect('/')
 
 
