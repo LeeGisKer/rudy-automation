@@ -1,13 +1,20 @@
+<<<<<<< ours
 """Minimal Flask dashboard for uploading receipts and viewing costs.
 
 Now supports multi-file uploads and background OCR processing to handle
 10–50 photos per session without blocking the request.
 """
 from flask import Flask, render_template, request, redirect, url_for
+=======
+"""Minimal Flask dashboard for uploading receipts and viewing costs."""
+from flask import Flask, render_template, request, redirect
+>>>>>>> theirs
 from werkzeug.utils import secure_filename
-import json
+
+
 from pathlib import Path
-from uuid import uuid4
+
+
 import sys
 import os
 from concurrent.futures import ThreadPoolExecutor
@@ -18,6 +25,8 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 from ocr.receipt_ocr import extract_receipt
 
 app = Flask(__name__)
+<<<<<<< ours
+<<<<<<< ours
 
 # Store uploads within the dashboard package directory
 UPLOAD_DIR = Path(__file__).resolve().parent / "uploads"
@@ -33,22 +42,49 @@ ALLOWED_EXT = {'.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff', '.webp', '.gif'
 OCR_ASYNC = os.getenv("OCR_ASYNC", "1") == "1"
 OCR_WORKERS = max(1, int(os.getenv("OCR_WORKERS", "2")))
 _EXECUTOR = ThreadPoolExecutor(max_workers=OCR_WORKERS) if OCR_ASYNC else None
+=======
+# Store uploads within the dashboard package directory to avoid permission issues
+UPLOAD_DIR = Path(__file__).resolve().parent / "uploads"
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+>>>>>>> theirs
+=======
+UPLOAD_DIR = Path('uploads')
+UPLOAD_DIR.mkdir(exist_ok=True)
+>>>>>>> theirs
 
 
 @app.route('/')
 def index():
     entries = []
+<<<<<<< ours
+<<<<<<< ours
     for f in sorted(UPLOAD_DIR.glob('*.json')):
+=======
+    for f in UPLOAD_DIR.glob('*.json'):
+>>>>>>> theirs
         try:
             data = json.loads(f.read_text())
         except json.JSONDecodeError as exc:
             data = {"raw_text": f"JSON error: {exc}"}
+<<<<<<< ours
         entries.append({"name": f.stem, "data": data})
     # Auto-scan for orphan images without JSON and schedule processing
     if OCR_ASYNC:
         _bootstrap_pending_jobs()
     any_processing = any(e["data"].get("status") == "processing" for e in entries)
     return render_template('index.html', files=entries, any_processing=any_processing)
+=======
+        name = data.get("original_name", f.stem)
+        entries.append({"name": name, "data": data})
+=======
+    for f in UPLOAD_DIR.glob('*'):
+
+        if f.is_file():
+            data = extract_receipt(f)
+            entries.append({"name": f.name, "data": data})
+>>>>>>> theirs
+    return render_template('index.html', files=entries)
+>>>>>>> theirs
 
 
 @app.route('/upload', methods=['POST'])
@@ -88,6 +124,7 @@ def classify(name: str):
     # Do not allow edits while processing; show form after completion
     if data.get('status') == 'processing' and request.method == 'GET':
         return redirect('/')
+<<<<<<< ours
 
     if request.method == 'POST':
         job_name = (request.form.get('job_name') or '').strip() or None
@@ -102,6 +139,7 @@ def classify(name: str):
         data.pop('status', None)
         json_path.write_text(json.dumps(data, indent=2))
         return redirect('/')
+<<<<<<< ours
 
     return render_template('classify.html', file=name, data=data)
 
@@ -147,6 +185,19 @@ def _bootstrap_pending_jobs() -> None:
             if meta.get('status') == 'processing':
                 # Re-enqueue if previous run crashed
                 _EXECUTOR.submit(_process_and_write, img)
+=======
+    filename = secure_filename(file.filename)
+    dest = UPLOAD_DIR / f"{uuid4().hex}_{filename}"
+    file.save(dest)
+    data = extract_receipt(dest)
+    out = {"original_name": filename, **data}
+    (dest.with_suffix('.json')).write_text(json.dumps(out, indent=2))
+    return redirect('/')
+>>>>>>> theirs
+=======
+    dest = UPLOAD_DIR / secure_filename(file.filename)
+    file.save(dest)
+>>>>>>> theirs
 
 
 if __name__ == '__main__':

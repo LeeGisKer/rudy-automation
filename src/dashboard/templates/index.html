@@ -16,6 +16,8 @@
 
       <div class="mb-4">
         <h2>{{ f.name }}</h2>
+<<<<<<< ours
+<<<<<<< ours
         {% if f.data.status == 'processing' %}
           <div class="text-muted">Processing...</div>
         {% endif %}
@@ -47,6 +49,13 @@
           <pre style="white-space: pre-wrap">{{ f.data.raw_text }}</pre>
         </details>
         {% endif %}
+=======
+        <p>Job Name: {{ f.data.job_name or 'N/A' }}</p>
+        <p>Total: {{ f.data.total or 'N/A' }}</p>
+=======
+>>>>>>> theirs
+        <pre>{{ f.data.raw_text }}</pre>
+>>>>>>> theirs
       </div>
 
     {% endfor %}

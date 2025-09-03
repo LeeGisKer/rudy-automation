@@ -4,9 +4,15 @@ Outputs JSON file with parsed data.
 """
 from pathlib import Path
 import json
+<<<<<<< ours
 import re
+<<<<<<< ours
 from typing import Optional, List, Tuple, Dict, Any
 import os
+=======
+>>>>>>> theirs
+=======
+>>>>>>> theirs
 
 from PIL import Image, UnidentifiedImageError, ImageOps, ImageFilter, ExifTags
 import pytesseract
@@ -21,13 +27,15 @@ except Exception:
 
 
 def extract_receipt(image_path: str) -> dict:
-    """Extract text from receipt image and return structured data.
+    """Extract text from receipt image and return basic structured data.
+    """Extract text from receipt image and return basic structured data.
 
     The image is converted to grayscale and scaled down so that OCR runs
     efficiently on resource-constrained hardware like a Raspberry Pi.
     """
 
     try:
+<<<<<<< ours
         psm = os.getenv("OCR_PSM", "6")
         base_cfg = f"--oem 3 --psm {psm}"
 
@@ -46,12 +54,29 @@ def extract_receipt(image_path: str) -> dict:
         if job_name is None:
             job_name = _extract_jobname_via_data(variants, base_cfg)
         return {"raw_text": best_text, "job_name": job_name, "total": total, "variant": best_label, "stats": best_stats}
+=======
+        with Image.open(image_path) as img:
+            img = img.convert("L")
+            img.thumbnail((2000, 2000))
+            text = pytesseract.image_to_string(
+                img, lang="eng", config="--psm 6"
+            )
+<<<<<<< ours
+        job_name = _parse_job_name(text)
+        total = _parse_total(text)
+        return {"raw_text": text, "job_name": job_name, "total": total}
+>>>>>>> theirs
+=======
+        return {"raw_text": text}
+>>>>>>> theirs
     except (UnidentifiedImageError, OSError) as exc:
         return {"raw_text": f"Image error: {exc}"}
     except (TesseractNotFoundError, TesseractError) as exc:
         return {"raw_text": f"OCR error: {exc}"}
 
 
+<<<<<<< ours
+<<<<<<< ours
 def _auto_orient(img: Image.Image) -> Image.Image:
     try:
         exif = img.getexif()
@@ -506,6 +531,9 @@ def _four_point_transform(image: 'np.ndarray', pts: 'np.ndarray') -> 'np.ndarray
 
 
 def _parse_job_name(text: str) -> Optional[str]:
+=======
+def _parse_job_name(text: str) -> str | None:
+>>>>>>> theirs
     """Return the job name if present in the OCR text."""
     match = re.search(r"JOB\s*NAME[:#]?\s*([A-Za-z0-9\-]+)", text, re.IGNORECASE)
     if match:
@@ -513,6 +541,7 @@ def _parse_job_name(text: str) -> Optional[str]:
     return None
 
 
+<<<<<<< ours
 def _parse_total(text: str) -> Optional[float]:
     """Return the receipt total as a float if found.
 
@@ -527,6 +556,11 @@ def _parse_total(text: str) -> Optional[float]:
     candidates = []
     for pat in patterns:
         candidates.extend(re.findall(pat, text, re.IGNORECASE))
+=======
+def _parse_total(text: str) -> float | None:
+    """Return the receipt total as a float if found."""
+    candidates = re.findall(r"\bTOTAL\b\s*\$?([0-9.,]+)", text, re.IGNORECASE)
+>>>>>>> theirs
     if not candidates:
         return None
     try:
@@ -536,6 +570,8 @@ def _parse_total(text: str) -> Optional[float]:
         return None
 
 
+=======
+>>>>>>> theirs
 
 
 def main(paths):
