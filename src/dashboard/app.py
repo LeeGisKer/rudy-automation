@@ -1,9 +1,9 @@
 """Minimal Flask dashboard for uploading receipts and viewing costs."""
 from flask import Flask, render_template, request, redirect
 from werkzeug.utils import secure_filename
-
+import json
 from pathlib import Path
-
+from uuid import uuid4
 import sys
 
 # Allow importing modules from the parent src directory
@@ -11,18 +11,21 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 from ocr.receipt_ocr import extract_receipt
 
 app = Flask(__name__)
-UPLOAD_DIR = Path('uploads')
-UPLOAD_DIR.mkdir(exist_ok=True)
+# Store uploads within the dashboard package directory to avoid permission issues
+UPLOAD_DIR = Path(__file__).resolve().parent / "uploads"
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
 @app.route('/')
 def index():
     entries = []
-    for f in UPLOAD_DIR.glob('*'):
-
-        if f.is_file():
-            data = extract_receipt(f)
-            entries.append({"name": f.name, "data": data})
+    for f in UPLOAD_DIR.glob('*.json'):
+        try:
+            data = json.loads(f.read_text())
+        except json.JSONDecodeError as exc:
+            data = {"raw_text": f"JSON error: {exc}"}
+        name = data.get("original_name", f.stem)
+        entries.append({"name": name, "data": data})
     return render_template('index.html', files=entries)
 
 
@@ -31,8 +34,13 @@ def upload():
     file = request.files.get('receipt')
     if not file or file.filename == '':
         return redirect('/')
-    dest = UPLOAD_DIR / secure_filename(file.filename)
+    filename = secure_filename(file.filename)
+    dest = UPLOAD_DIR / f"{uuid4().hex}_{filename}"
     file.save(dest)
+    data = extract_receipt(dest)
+    out = {"original_name": filename, **data}
+    (dest.with_suffix('.json')).write_text(json.dumps(out, indent=2))
+    return redirect('/')
 
 
 if __name__ == '__main__':
