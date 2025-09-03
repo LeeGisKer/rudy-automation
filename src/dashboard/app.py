@@ -3,7 +3,7 @@ from flask import Flask, render_template, request, redirect
 from werkzeug.utils import secure_filename
 import json
 from pathlib import Path
-
+from uuid import uuid4
 import sys
 
 # Allow importing modules from the parent src directory
@@ -11,7 +11,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 from ocr.receipt_ocr import extract_receipt
 
 app = Flask(__name__)
-UPLOAD_DIR = Path('uploads')
+
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
