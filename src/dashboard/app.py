@@ -19,10 +19,22 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 from ocr.receipt_ocr import extract_receipt
 try:
     # When running as a package (e.g., gunicorn)
-    from .storage import save_ticket, save_from_json_path, backfill_uploads
+    from .storage import (
+        save_ticket,
+        save_from_json_path,
+        backfill_uploads,
+        spend_by_month,
+        spend_by_week,
+    )
 except Exception:
     # When running as a script: fallback to local import
-    from storage import save_ticket, save_from_json_path, backfill_uploads
+    from storage import (
+        save_ticket,
+        save_from_json_path,
+        backfill_uploads,
+        spend_by_month,
+        spend_by_week,
+    )
 
 app = Flask(__name__)
 
@@ -192,6 +204,8 @@ def classify(name: str):
     if request.method == "POST":
         job_name = (request.form.get("job_name") or "").strip() or None
         total_str = (request.form.get("total") or "").strip()
+        category_raw = (request.form.get("category") or "").strip().lower()
+        category = "fuel" if category_raw == "fuel" else None
         try:
             total_val = float(total_str.replace(",", "")) if total_str else None
         except ValueError:
@@ -199,6 +213,10 @@ def classify(name: str):
 
         data["job_name"] = job_name
         data["total"] = total_val
+        if category:
+            data["category"] = category
+        else:
+            data.pop("category", None)
         data.pop("status", None)
         json_path.write_text(json.dumps(data, indent=2))
         # Persist classification edits to DB
@@ -211,12 +229,30 @@ def classify(name: str):
                 total=total_val,
                 batch_id=data.get("batch_id"),
                 batch_seq=data.get("batch_seq"),
+                category=category,
             )
         except Exception:
             pass
         return redirect("/")
 
     return render_template("classify.html", file=name, data=data)
+
+
+@app.route("/reports")
+def reports():
+    # Ensure DB has latest entries
+    try:
+        backfill_uploads(UPLOAD_DIR)
+    except Exception:
+        pass
+    monthly = []
+    weekly = []
+    try:
+        monthly = spend_by_month()
+        weekly = spend_by_week()
+    except Exception:
+        pass
+    return render_template("reports.html", monthly=monthly, weekly=weekly)
 
 
 def _schedule_ocr(image_path: Path, meta: dict | None = None) -> None:

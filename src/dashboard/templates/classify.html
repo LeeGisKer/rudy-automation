@@ -9,6 +9,13 @@
     <h1>Classification for {{ file }}</h1>
     <form method="post" class="mb-3">
       <div class="mb-3">
+        <label class="form-label">Category</label>
+        <select class="form-select" name="category">
+          <option value="" {% if not data.category %}selected{% endif %}>— None —</option>
+          <option value="fuel" {% if data.category == 'fuel' %}selected{% endif %}>Fuel</option>
+        </select>
+      </div>
+      <div class="mb-3">
         <label class="form-label">Job Name</label>
         <input class="form-control" type="text" name="job_name" value="{{ data.job_name or '' }}" placeholder="Enter job name">
       </div>
