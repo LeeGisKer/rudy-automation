@@ -44,6 +44,15 @@ python src/dashboard/app.py
 Open <http://localhost:5000> in your browser and use the form to upload receipts.
 Uploaded files appear below the form with the text that Tesseract extracted so you can verify the classification.
 
+#### Ticket data persistence
+The dashboard saves each receipt's `job_name` and `total` (plus basic metadata) to a local SQLite database at `src/dashboard/tickets.db`. This database is updated when OCR completes or when you edit values on the classification form. Existing JSONs are also backfilled on page load.
+
+Example query:
+
+```bash
+sqlite3 src/dashboard/tickets.db "SELECT id, job_name, total FROM tickets ORDER BY updated_at DESC LIMIT 20;"
+```
+
 ### Performance tuning
 - Set `OCR_FAST=1` to favor speed: disables heavy pre-processing, reduces image size, and tries a leaner set of variants.
 - Adjust `OCR_MAX_EDGE` (default 1800; fast mode default 1400) to control the long-edge resize before OCR. Lower values are faster.

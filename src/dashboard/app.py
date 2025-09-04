@@ -17,6 +17,12 @@ from datetime import datetime
 # Allow importing modules from the parent src directory
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 from ocr.receipt_ocr import extract_receipt
+try:
+    # When running as a package (e.g., gunicorn)
+    from .storage import save_ticket, save_from_json_path, backfill_uploads
+except Exception:
+    # When running as a script: fallback to local import
+    from storage import save_ticket, save_from_json_path, backfill_uploads
 
 app = Flask(__name__)
 
@@ -119,6 +125,12 @@ def index():
     if OCR_ASYNC:
         _bootstrap_pending_jobs()
 
+    # Backfill DB so saved tickets are queryable in the future
+    try:
+        backfill_uploads(UPLOAD_DIR)
+    except Exception:
+        pass
+
     any_processing = any(e["data"].get("status") == "processing" for e in entries)
     return render_template("index.html", groups=groups, any_processing=any_processing)
 
@@ -153,6 +165,11 @@ def upload():
             out = {**meta, **data}
             json_path = dest.with_suffix(".json")
             json_path.write_text(json.dumps(out, indent=2))
+            # Persist to DB if any field present
+            try:
+                save_from_json_path(json_path)
+            except Exception:
+                pass
             if not out.get("job_name") or out.get("total") is None:
                 return redirect(url_for("classify", name=json_path.stem))
     return redirect("/")
@@ -184,6 +201,19 @@ def classify(name: str):
         data["total"] = total_val
         data.pop("status", None)
         json_path.write_text(json.dumps(data, indent=2))
+        # Persist classification edits to DB
+        try:
+            save_ticket(
+                id=name,
+                file=data.get("file"),
+                original_name=data.get("original_name"),
+                job_name=job_name,
+                total=total_val,
+                batch_id=data.get("batch_id"),
+                batch_seq=data.get("batch_seq"),
+            )
+        except Exception:
+            pass
         return redirect("/")
 
     return render_template("classify.html", file=name, data=data)
@@ -225,7 +255,13 @@ def _process_and_write(image_path: Path) -> None:
         except Exception:
             pass
         out = {"file": image_path.name, "original_name": original_name, **meta, **data}
-        image_path.with_suffix(".json").write_text(json.dumps(out, indent=2))
+        json_p = image_path.with_suffix(".json")
+        json_p.write_text(json.dumps(out, indent=2))
+        # Persist to DB
+        try:
+            save_from_json_path(json_p)
+        except Exception:
+            pass
     except Exception as exc:
         error = {"status": "error", "error": str(exc), "file": image_path.name}
         image_path.with_suffix(".json").write_text(json.dumps(error, indent=2))
