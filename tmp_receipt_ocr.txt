@@ -50,24 +50,6 @@ def _parse_psms() -> List[int]:
     return [single]
 
 
-def _env_flag(name: str, default: bool) -> bool:
-    v = os.getenv(name)
-    if v is None:
-        return default
-    return v.strip() in {"1", "true", "True", "yes", "on"}
-
-
-def _parse_max_edge() -> int:
-    try:
-        val = int(os.getenv("OCR_MAX_EDGE", "0") or 0)
-        if val > 200 and val < 6000:
-            return val
-    except Exception:
-        pass
-    # Default: smaller edge in fast mode for speed; otherwise 1800
-    return 1400 if _env_flag("OCR_FAST", False) else 1800
-
-
 def extract_receipt(image_path: str | Path) -> dict:
     """Extract text from a receipt image and return structured data.
 
@@ -81,31 +63,19 @@ def extract_receipt(image_path: str | Path) -> dict:
         pil_base = _load_prepare_image(p)
         variants = _generate_variants(pil_base)
 
-        # Cache OCR data per (variant_label, config) to avoid re-running tesseract
-        data_cache: Dict[Tuple[str, str], Dict[str, Any]] = {}
-
-        # Field-aware selection across variants x PSMs with optional early-exit
+        # Field-aware selection across variants x PSMs
         best_tuple = (-1, 0.0, 0, "", 0, "", {"mean_conf": 0.0, "n_words": 0, "len": 0})
         # (field_score, mean_conf, len, label, psm, text, stats)
-        early_enabled = _env_flag("OCR_EARLY_STOP", True)
-        early_conf = float(os.getenv("OCR_EARLY_CONF", "55") or 55)
-        early_hit = False
         for label, img in variants:
             for psm in psms:
                 cfg = f"--oem 3 --psm {psm}"
-                text, stats = _ocr_stats(img, cfg, cache_key=(label, cfg), cache=data_cache)
+                text, stats = _ocr_stats(img, cfg)
                 j = _parse_job_name(text)
                 t = _parse_total(text)
                 field_score = (1 if t is not None else 0) + (1 if j else 0)
                 cand = (field_score, stats.get("mean_conf", 0.0), min(stats.get("len", 0), 5000), label, psm, text, stats)
                 if cand > best_tuple:
                     best_tuple = cand
-                # Early-exit when both fields present with decent confidence
-                if early_enabled and field_score == 2 and stats.get("mean_conf", 0.0) >= early_conf:
-                    early_hit = True
-                    break
-            if early_hit:
-                break
 
         field_score, _, _, best_label, best_psm, best_text, best_stats = best_tuple
 
@@ -117,17 +87,16 @@ def extract_receipt(image_path: str | Path) -> dict:
 
         # ROI and data-based fallbacks, try each PSM until found
         if total is None:
-            # Try best-first: same PSM/order, but reuse cached data
             for psm in psms:
                 cfg = f"--oem 3 --psm {psm}"
-                total = _extract_total_via_data(variants, cfg, data_cache)
+                total = _extract_total_via_data(variants, cfg)
                 if total is not None:
                     break
 
         if job_name is None:
             for psm in psms:
                 cfg = f"--oem 3 --psm {psm}"
-                job_name = _extract_jobname_via_data(variants, cfg, data_cache)
+                job_name = _extract_jobname_via_data(variants, cfg)
                 if job_name is not None:
                     break
 
@@ -164,10 +133,10 @@ def _auto_orient(img: Image.Image) -> Image.Image:
 def _load_prepare_image(path: Path) -> Image.Image:
     with Image.open(path) as pil:
         pil = _auto_orient(pil)
-        pil = _resize_long_edge(pil, _parse_max_edge())
+        pil = _resize_long_edge(pil, 1800)
         pil = pil.convert("RGB")
         # If OpenCV available, try orientation detection (OSD) when EXIF is missing
-        if _HAS_CV and not _has_exif_orientation(path) and not _env_flag("OCR_FAST", False):
+        if _HAS_CV and not _has_exif_orientation(path):
             try:
                 gray = ImageOps.grayscale(pil)
                 arr = np.array(gray)
@@ -177,7 +146,7 @@ def _load_prepare_image(path: Path) -> Image.Image:
             except Exception:
                 pass
         # Optional perspective correction/cropping to the receipt region
-        if _HAS_CV and not os.getenv("OCR_DISABLE_CROP") and not _env_flag("OCR_FAST", False):
+        if _HAS_CV and not os.getenv("OCR_DISABLE_CROP"):
             try:
                 corrected = _crop_receipt_region(pil)
                 if corrected is not None:
@@ -215,26 +184,14 @@ def _generate_variants(pil: Image.Image) -> List[Tuple[str, object]]:
     bw_arr = (arr > thr).astype("uint8") * 255
     variants.append(("pil_otsu", Image.fromarray(bw_arr)))
 
-    # Allow users to limit variants via env (comma list of labels)
-    allowed_variants = None
-    raw_var = os.getenv("OCR_VARIANTS")
-    if raw_var:
-        allowed_variants = {v.strip() for v in raw_var.split(",") if v.strip()}
-
-    fast = _env_flag("OCR_FAST", False)
-
     if _HAS_CV and not os.getenv("OCR_DISABLE_CV"):
         img = cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
         # CLAHE + adaptive threshold
-        clahe = cv2.createCLAHE(clipLimit=2.0 if fast else 2.5, tileGridSize=(8, 8))
+        clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
         gray_c = clahe.apply(gray)
-        # Bilateral filter is expensive; lighten or skip in fast mode
-        if not fast:
-            gray_c = cv2.bilateralFilter(gray_c, d=5, sigmaColor=45, sigmaSpace=45)
-        else:
-            gray_c = cv2.medianBlur(gray_c, 3)
+        gray_c = cv2.bilateralFilter(gray_c, d=5, sigmaColor=45, sigmaSpace=45)
         bw_adapt = cv2.adaptiveThreshold(
             gray_c, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 31, 12
         )
@@ -245,36 +202,15 @@ def _generate_variants(pil: Image.Image) -> List[Tuple[str, object]]:
         _, bw_otsu = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         variants.append(("cv_otsu", bw_otsu))
 
-        # Deskew + sharpen (skip in fast mode)
-        if not fast:
-            angle = _estimate_skew_angle(bw_adapt)
-            if abs(angle) > 0.5:
-                deskewed = _rotate_bound(bw_adapt, -angle)
-            else:
-                deskewed = bw_adapt
-            sharp = cv2.GaussianBlur(deskewed, (0, 0), 1.0)
-            sharp = cv2.addWeighted(sharp, 1.4, sharp, -0.4, 0)
-            variants.append(("cv_adapt_deskew_sharp", sharp))
-
-    # If a subset is requested, filter here (preserve order)
-    if allowed_variants is not None:
-        variants = [(lbl, img) for (lbl, img) in variants if lbl in allowed_variants]
-
-    # In fast mode, prioritize high-yield variants and drop pil_gray
-    if fast:
-        order = ["pil_otsu", "cv_adapt", "cv_otsu"]
-        seen = set()
-        pruned: List[Tuple[str, object]] = []
-        for key in order:
-            for lbl, img in variants:
-                if lbl == key and lbl not in seen:
-                    pruned.append((lbl, img))
-                    seen.add(lbl)
-        # Append any remaining variants (unlikely) to allow override
-        for lbl, img in variants:
-            if lbl not in seen:
-                pruned.append((lbl, img))
-        variants = pruned
+        # Deskew + sharpen
+        angle = _estimate_skew_angle(bw_adapt)
+        if abs(angle) > 0.5:
+            deskewed = _rotate_bound(bw_adapt, -angle)
+        else:
+            deskewed = bw_adapt
+        sharp = cv2.GaussianBlur(deskewed, (0, 0), 1.0)
+        sharp = cv2.addWeighted(sharp, 1.4, sharp, -0.4, 0)
+        variants.append(("cv_adapt_deskew_sharp", sharp))
 
     return variants
 
@@ -292,17 +228,11 @@ def _osd_rotation(gray_arr: "np.ndarray") -> int:
     return 0
 
 
-def _ocr_stats(image, config: str, *, cache_key: Tuple[str, str] | None = None, cache: Dict[Tuple[str, str], Dict[str, Any]] | None = None) -> Tuple[str, Dict[str, Any]]:
+def _ocr_stats(image, config: str) -> Tuple[str, Dict[str, Any]]:
     try:
-        # Try cached data first
-        if cache is not None and cache_key is not None and cache_key in cache:
-            data = cache[cache_key]
-        else:
-            data = pytesseract.image_to_data(
-                image, lang="eng", config=config, output_type=pytesseract.Output.DICT
-            )
-            if cache is not None and cache_key is not None:
-                cache[cache_key] = data
+        data = pytesseract.image_to_data(
+            image, lang="eng", config=config, output_type=pytesseract.Output.DICT
+        )
         confs = [
             int(c) for c in data.get("conf", []) if str(c).isdigit() and int(c) >= 0
         ]
@@ -327,7 +257,7 @@ def _choose_best_variant(variants: List[Tuple[str, object]], config: str) -> Tup
     return best
 
 
-def _extract_total_via_data(variants: List[Tuple[str, object]], config: str, cache: Dict[Tuple[str, str], Dict[str, Any]] | None = None) -> Optional[float]:
+def _extract_total_via_data(variants: List[Tuple[str, object]], config: str) -> Optional[float]:
     """Search for TOTAL-like tokens and OCR the numeric ROI to the right.
 
     Prefers the bottom-most TOTAL line and ignores SUBTOTAL.
@@ -335,16 +265,11 @@ def _extract_total_via_data(variants: List[Tuple[str, object]], config: str, cac
     label_tokens = {"TOTAL", "GRAND", "DUE", "AMOUNT", "BALANCE"}
     best_candidate = None  # (img, x_right, y0, y1)
 
-    for label, img in variants:
+    for _, img in variants:
         try:
-            if cache is not None and (label, config) in cache:
-                data = cache[(label, config)]
-            else:
-                data = pytesseract.image_to_data(
-                    img, lang="eng", config=config, output_type=pytesseract.Output.DICT
-                )
-                if cache is not None:
-                    cache[(label, config)] = data
+            data = pytesseract.image_to_data(
+                img, lang="eng", config=config, output_type=pytesseract.Output.DICT
+            )
         except Exception:
             continue
         lines = _group_lines(data)
@@ -442,7 +367,7 @@ def _parse_number_from_words(words: List[Dict[str, Any]]) -> Optional[float]:
     return None
 
 
-def _extract_jobname_via_data(variants: List[Tuple[str, object]], config: str, cache: Dict[Tuple[str, str], Dict[str, Any]] | None = None) -> Optional[str]:
+def _extract_jobname_via_data(variants: List[Tuple[str, object]], config: str) -> Optional[str]:
     label_patterns = [
         ["PO/JOB", "NAME"],
         ["JOB", "NAME"],
@@ -450,16 +375,11 @@ def _extract_jobname_via_data(variants: List[Tuple[str, object]], config: str, c
         ["JOB", "NO"],
         ["PROJECT", "NAME"],
     ]
-    for label, img in variants:
+    for _, img in variants:
         try:
-            if cache is not None and (label, config) in cache:
-                data = cache[(label, config)]
-            else:
-                data = pytesseract.image_to_data(
-                    img, lang="eng", config=config, output_type=pytesseract.Output.DICT
-                )
-                if cache is not None:
-                    cache[(label, config)] = data
+            data = pytesseract.image_to_data(
+                img, lang="eng", config=config, output_type=pytesseract.Output.DICT
+            )
         except Exception:
             continue
         lines = _group_lines(data)
@@ -701,3 +621,4 @@ if __name__ == "__main__":
         print("Usage: python receipt_ocr.py <image1> <image2> ...")
     else:
         main(sys.argv[1:])
+

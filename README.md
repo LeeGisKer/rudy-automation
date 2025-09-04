@@ -44,6 +44,14 @@ python src/dashboard/app.py
 Open <http://localhost:5000> in your browser and use the form to upload receipts.
 Uploaded files appear below the form with the text that Tesseract extracted so you can verify the classification.
 
+### Performance tuning
+- Set `OCR_FAST=1` to favor speed: disables heavy pre-processing, reduces image size, and tries a leaner set of variants.
+- Adjust `OCR_MAX_EDGE` (default 1800; fast mode default 1400) to control the long-edge resize before OCR. Lower values are faster.
+- Limit variants with `OCR_VARIANTS` (comma list, e.g. `pil_otsu,cv_adapt`).
+- Enable early stop with `OCR_EARLY_STOP=1` (default) and tweak `OCR_EARLY_CONF` (default 55) to stop once both fields are found with sufficient confidence.
+- Control Tesseract page modes via `OCR_PSMS` (comma list, e.g. `6,4,11`) or single `OCR_PSM`.
+- In the dashboard, increase parallelism with `OCR_WORKERS` (defaults to 2) and ensure `OCR_ASYNC=1` to process in background threads.
+
 ### Run with Docker
 Build a container image and launch the dashboard:
 ```bash
