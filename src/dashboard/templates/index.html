@@ -13,11 +13,11 @@
     </form>
     {% for g in groups %}
       {% if g.id %}
-        <h3 class="mt-4">Batch {{ g.title }} <span class="badge bg-secondary ms-2">{{ g.items|length }}{% if g.batch_total %}/{{ g.batch_total }}{% endif %}</span></h3>
+        <h3 class="mt-4">Batch {{ g.title }} <span class="badge bg-secondary ms-2">{{ g['items']|length }}{% if g.batch_total %}/{{ g.batch_total }}{% endif %}</span></h3>
       {% else %}
         <h3 class="mt-4">Other</h3>
       {% endif %}
-      {% for f in g.items %}
+      {% for f in g['items'] %}
       <div class="mb-4">
         <h2 class="d-flex justify-content-between align-items-center">
           <span>
