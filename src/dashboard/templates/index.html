@@ -19,10 +19,61 @@
       {% endif %}
       {% for f in g.items %}
       <div class="mb-4">
-        <h2>{{ f.name }}</h2>
+        <h2 class="d-flex justify-content-between align-items-center">
+          <span>
+            {{ f.name }}
+            {% if f.data.batch_seq %}
+              <span class="badge bg-secondary ms-2">#{{ f.data.batch_seq }}{% if f.data.batch_total %}/{{ f.data.batch_total }}{% endif %}</span>
+            {% endif %}
+          </span>
+          <a class="btn btn-link btn-sm" href="{{ url_for('classify', name=f.id) }}">Edit</a>
+        </h2>
+        {% if f.data.status == 'processing' %}
+          <div class="text-muted">Processing...</div>
+        {% endif %}
         <p>Job Name: {{ f.data.job_name or 'N/A' }}</p>
-        <p>Total: {{ f.data.total or 'N/A' }}</p>
-        <pre>{{ f.data.raw_text }}</pre>
+        <p>Total: {{ f.data.total if f.data.total is not none else 'N/A' }}</p>
+        {% set needs_fix = (not f.data.job_name) or (f.data.total is none) %}
+        {% if needs_fix %}
+          <div class="alert alert-warning p-2 mt-2">
+            <div class="d-flex justify-content-between align-items-center">
+              <div><strong>Missing data.</strong> Provide Job Name and/or Total.</div>
+              <a class="btn btn-link btn-sm" href="{{ url_for('classify', name=f.id) }}">Open full form</a>
+            </div>
+            <form class="row g-2 mt-1" method="post" action="{{ url_for('classify', name=f.id) }}">
+              <div class="col-sm-5">
+                <input class="form-control form-control-sm" name="job_name" placeholder="Job name" value="{{ f.data.job_name or '' }}">
+              </div>
+              <div class="col-sm-3">
+                <input class="form-control form-control-sm" name="total" placeholder="Total (e.g., 49.47)" value="{{ f.data.total if f.data.total is not none else '' }}">
+              </div>
+              <div class="col-sm-2">
+                <button class="btn btn-primary btn-sm w-100" type="submit">Save</button>
+              </div>
+            </form>
+          </div>
+        {% endif %}
+        <details class="mt-2">
+          <summary>Quick edit</summary>
+          <form class="row g-2 mt-1" method="post" action="{{ url_for('classify', name=f.id) }}">
+            <div class="col-sm-5">
+              <input class="form-control form-control-sm" name="job_name" placeholder="Job name" value="{{ f.data.job_name or '' }}">
+            </div>
+            <div class="col-sm-3">
+              <input class="form-control form-control-sm" name="total" placeholder="Total (e.g., 49.47)" value="{{ f.data.total if f.data.total is not none else '' }}">
+            </div>
+            <div class="col-sm-2">
+              <button class="btn btn-primary btn-sm w-100" type="submit">Save</button>
+            </div>
+          </form>
+          <div class="form-text">Tip: use the Edit page for a stable view if the list is auto-refreshing during processing.</div>
+        </details>
+        {% if f.data.raw_text %}
+        <details>
+          <summary>Show OCR text</summary>
+          <pre style="white-space: pre-wrap">{{ f.data.raw_text }}</pre>
+        </details>
+        {% endif %}
       </div>
       {% endfor %}
     {% endfor %}
