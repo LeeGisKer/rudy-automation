@@ -23,7 +23,11 @@ COPY README.md ./README.md
 # Expose Flask port
 EXPOSE 5000
 
-# Default command uses Gunicorn with gthread workers
+# Default command uses Gunicorn with gthread workers and OCR defaults
 ENV GUNICORN_WORKERS=2 \
-    GUNICORN_THREADS=4
-CMD ["gunicorn", "-w", "${GUNICORN_WORKERS}", "-k", "gthread", "--threads", "${GUNICORN_THREADS}", "-b", "0.0.0.0:5000", "src.dashboard.wsgi:app"]
+    GUNICORN_THREADS=4 \
+    OCR_PSMS="6,4,11" \
+    OCR_ASYNC=1 \
+    MAX_UPLOAD_MB=20
+# Use a shell so environment variables expand to integers
+CMD ["sh", "-c", "gunicorn -w ${GUNICORN_WORKERS:-2} -k gthread --threads ${GUNICORN_THREADS:-4} -b 0.0.0.0:5000 src.dashboard.wsgi:app"]
