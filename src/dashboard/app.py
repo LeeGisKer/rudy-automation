@@ -25,6 +25,10 @@ try:
         backfill_uploads,
         spend_by_month,
         spend_by_week,
+        create_share,
+        get_share,
+        get_share_items,
+        list_job_totals,
     )
 except Exception:
     # When running as a script: fallback to local import
@@ -34,6 +38,10 @@ except Exception:
         backfill_uploads,
         spend_by_month,
         spend_by_week,
+        create_share,
+        get_share,
+        get_share_items,
+        list_job_totals,
     )
 
 app = Flask(__name__)
@@ -253,6 +261,35 @@ def reports():
     except Exception:
         pass
     return render_template("reports.html", monthly=monthly, weekly=weekly)
+
+
+@app.route("/share/new")
+def share_new():
+    """Create a temporary share link to view job/total data.
+
+    Optional query param `ttl` specifies minutes until expiration (default 60).
+    """
+    try:
+        ttl = int(request.args.get("ttl", "60"))
+        ttl = max(1, min(ttl, 7 * 24 * 60))  # clamp to [1 minute, 7 days]
+    except Exception:
+        ttl = 60
+    token = create_share(ttl_minutes=ttl)
+    return redirect(url_for("share_view", token=token))
+
+
+@app.route("/share/<token>")
+def share_view(token: str):
+    meta = get_share(token)
+    if not meta:
+        return render_template("share.html", token=token, expired=True, items=[], meta=None)
+    # Ensure DB has latest entries from uploads
+    try:
+        backfill_uploads(UPLOAD_DIR)
+    except Exception:
+        pass
+    items = get_share_items(token) or []
+    return render_template("share.html", token=token, expired=False, items=items, meta=meta)
 
 
 def _schedule_ocr(image_path: Path, meta: dict | None = None) -> None:

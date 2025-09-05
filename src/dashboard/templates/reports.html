@@ -8,7 +8,10 @@
   <body class="p-4">
     <div class="d-flex justify-content-between align-items-center">
       <h1 class="mb-4">Spending Reports</h1>
-      <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('index') }}">Back to Receipts</a>
+      <div class="d-flex gap-2">
+        <a class="btn btn-outline-primary btn-sm" href="{{ url_for('share_new') }}" title="Create a temporary share link">Create Share Link</a>
+        <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('index') }}">Back to Receipts</a>
+      </div>
     </div>
 
     <h3>Monthly Totals</h3>
@@ -66,4 +69,3 @@
     </div>
   </body>
   </html>
-

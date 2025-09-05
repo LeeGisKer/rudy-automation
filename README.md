@@ -3,6 +3,7 @@
 This repository provides scripts, templates, and a minimal dashboard for digitizing operations of a small construction company.
 
 ## Contents
+- `src/dashboard/storage.py` — SQLite persistence for tickets (job name, total, metadata) and DB-backed temporary share links.
 - `src/ocr/receipt_ocr.py` – Extracts raw text from receipt images using Tesseract OCR and writes JSON files.
 - `src/ocr/job_assigner.py` – Command‑line helper to tag receipt line items with job IDs and save a new CSV.
 - `src/dashboard/app.py` – Flask web dashboard for uploading receipts and viewing stored files.
@@ -18,7 +19,7 @@ This repository provides scripts, templates, and a minimal dashboard for digitiz
 1. Install [Tesseract OCR](https://tesseract-ocr.github.io/) and ensure the `tesseract` command is available.
 2. Install Python dependencies:
    ```bash
-   pip install pillow pytesseract flask
+   pip install -r requirements.txt
    ```
 
 ## Usage
@@ -44,6 +45,9 @@ python src/dashboard/app.py
 Open <http://localhost:5000> in your browser and use the form to upload receipts.
 Uploaded files appear below the form with the text that Tesseract extracted so you can verify the classification.
 
+#### Reports
+Open `/reports` ("View Reports" button) for aggregated monthly and weekly totals, with a breakdown for fuel vs other categories.
+
 #### Ticket data persistence
 The dashboard saves each receipt's `job_name` and `total` (plus basic metadata) to a local SQLite database at `src/dashboard/tickets.db`. This database is updated when OCR completes or when you edit values on the classification form. Existing JSONs are also backfilled on page load.
 
@@ -51,6 +55,26 @@ Example query:
 
 ```bash
 sqlite3 src/dashboard/tickets.db "SELECT id, job_name, total FROM tickets ORDER BY updated_at DESC LIMIT 20;"
+```
+
+#### Temporary share links
+Create an expiring, read-only URL to share the list of receipts (showing Original Name, Job Name, Total, Updated):
+
+- From the UI: open `/reports` and click "Create Share Link".
+- Directly via URL: visit `/share/new` (optional `?ttl=MINUTES`, default 60, max 7 days).
+
+You will be redirected to `/share/<token>`, which anyone with the link can view until it expires. Share metadata is stored in the `shares` table within `src/dashboard/tickets.db`.
+
+Example: create a 2-hour link
+
+```bash
+open http://localhost:5000/share/new?ttl=120
+```
+
+Inspect active shares:
+
+```bash
+sqlite3 src/dashboard/tickets.db "SELECT token, created_at, expires_at FROM shares ORDER BY created_at DESC LIMIT 10;"
 ```
 
 ### Performance tuning
@@ -90,6 +114,7 @@ These scripts are starting points; expand them with additional parsing, data sto
 Este repositorio proporciona scripts, plantillas y un panel mínimo para digitalizar operaciones de una pequeña empresa de construcción.
 
 ## Contenido
+- `src/dashboard/storage.py` — Persistencia en SQLite para tickets (job name, total, metadatos) y enlaces temporales para compartir.
 - `src/ocr/receipt_ocr.py` – Extrae texto sin procesar de imágenes de recibos usando Tesseract OCR y escribe archivos JSON.
 - `src/ocr/job_assigner.py` – Herramienta de línea de comandos para etiquetar con IDs de trabajo los elementos de los recibos y guardar un nuevo CSV.
 - `src/dashboard/app.py` – Panel web en Flask para subir recibos y ver archivos almacenados.
@@ -105,7 +130,7 @@ Este repositorio proporciona scripts, plantillas y un panel mínimo para digital
 1. Instala [Tesseract OCR](https://tesseract-ocr.github.io/) y asegúrate de que el comando `tesseract` esté disponible.
 2. Instala las dependencias de Python:
    ```bash
-   pip install pillow pytesseract flask
+   pip install -r requirements.txt
    ```
 
 ## Uso
@@ -129,6 +154,38 @@ Inicia la aplicación Flask para subir y revisar archivos de recibos:
 python src/dashboard/app.py
 ```
 Abre <http://localhost:5000> en tu navegador y usa el formulario para subir recibos.
+
+#### Informes
+Visita `/reports` (botón "View Reports") para ver totales mensuales y semanales agregados, con desglose de combustible vs otros.
+
+#### Persistencia de datos de tickets
+El panel guarda `job_name` y `total` (más metadatos básicos) en una base SQLite en `src/dashboard/tickets.db`. Esta DB se actualiza al completar el OCR o al editar valores en el formulario. Los JSON existentes también se integran al cargar.
+
+Consulta de ejemplo:
+
+```bash
+sqlite3 src/dashboard/tickets.db "SELECT id, job_name, total FROM tickets ORDER BY updated_at DESC LIMIT 20;"
+```
+
+#### Enlaces temporales para compartir
+Crea una URL de solo lectura y con vencimiento para compartir la lista de recibos (Nombre original, Job Name, Total, Updated):
+
+- Desde la UI: abre `/reports` y haz clic en "Create Share Link".
+- Directo por URL: visita `/share/new` (parámetro opcional `?ttl=MINUTES`, por defecto 60, máximo 7 días).
+
+Serás redirigido a `/share/<token>`, que cualquiera con el enlace puede ver hasta que expire. Los metadatos se almacenan en la tabla `shares` dentro de `src/dashboard/tickets.db`.
+
+Ejemplo: crear un enlace de 2 horas
+
+```bash
+open http://localhost:5000/share/new?ttl=120
+```
+
+Ver enlaces activos:
+
+```bash
+sqlite3 src/dashboard/tickets.db "SELECT token, created_at, expires_at FROM shares ORDER BY created_at DESC LIMIT 10;"
+```
 
 ### Ejecutar con Docker
 Construye una imagen de contenedor y lanza el panel:
