@@ -85,7 +85,7 @@ These scripts are starting points; expand them with additional parsing, data sto
 
 ----------
 
-# Andamiaje de Automatización Digital
+# Automatización Digital
 
 Este repositorio proporciona scripts, plantillas y un panel mínimo para digitalizar operaciones de una pequeña empresa de construcción.
 
@@ -148,5 +148,5 @@ El servicio expone el panel en el puerto 80 y reenvía el tráfico a la aplicaci
 Duplica las plantillas CSV en `excel_templates/` para registrar gastos de combustible y generar cotizaciones en Excel o Google Sheets.
 
 ## Notas
-Estos scripts son puntos de partida; amplíalos con análisis adicional, almacenamiento de datos o integraciones según sea necesario.
+
 
