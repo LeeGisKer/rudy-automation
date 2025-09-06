@@ -15,7 +15,6 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 import io
 import csv
-import os
 from email.message import EmailMessage
 import smtplib
 try:

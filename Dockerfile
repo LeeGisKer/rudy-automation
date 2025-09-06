@@ -15,7 +15,6 @@ RUN apt-get update \
         libpangocairo-1.0-0 \
         libpangoft2-1.0-0 \
         libgdk-pixbuf2.0-0 \
-        libffi8 \
         shared-mime-info \
         fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
@@ -32,7 +31,7 @@ COPY src ./src
 COPY README.md ./README.md
 
 # Expose Flask port
-EXPOSE 5000:5000
+EXPOSE 5000
 
 # Default command uses Gunicorn with gthread workers and OCR defaults
 ENV GUNICORN_WORKERS=2 \
