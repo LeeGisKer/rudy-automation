@@ -3,7 +3,7 @@
 Supports multi-file uploads and background OCR processing to handle
 10–50 photos per session without blocking the request.
 """
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, jsonify, send_file
 from werkzeug.utils import secure_filename
 
 from pathlib import Path
@@ -13,6 +13,25 @@ import json
 from uuid import uuid4
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
+import io
+import csv
+import os
+from email.message import EmailMessage
+import smtplib
+try:
+    from weasyprint import HTML
+except Exception:
+    HTML = None
+try:
+    from openpyxl import Workbook
+except Exception:
+    Workbook = None
+try:
+    from apscheduler.schedulers.background import BackgroundScheduler
+    from apscheduler.triggers.cron import CronTrigger
+except Exception:
+    BackgroundScheduler = None
+    CronTrigger = None
 
 # Allow importing modules from the parent src directory
 sys.path.append(str(Path(__file__).resolve().parents[1]))
@@ -29,6 +48,9 @@ try:
         get_share,
         get_share_items,
         list_job_totals,
+        spend_by_job,
+        spend_by_category,
+        items_for_month,
     )
 except Exception:
     # When running as a script: fallback to local import
@@ -42,6 +64,9 @@ except Exception:
         get_share,
         get_share_items,
         list_job_totals,
+        spend_by_job,
+        spend_by_category,
+        items_for_month,
     )
 
 app = Flask(__name__)
@@ -290,6 +315,192 @@ def share_view(token: str):
         pass
     items = get_share_items(token) or []
     return render_template("share.html", token=token, expired=False, items=items, meta=meta)
+
+
+# JSON APIs for charts
+@app.route("/api/spend/by_job")
+def api_spend_by_job():
+    month = request.args.get("month") or None
+    try:
+        data = spend_by_job(month=month)
+    except Exception:
+        data = []
+    return jsonify(data)
+
+
+@app.route("/api/spend/by_category")
+def api_spend_by_category():
+    month = request.args.get("month") or None
+    try:
+        data = spend_by_category(month=month)
+    except Exception:
+        data = []
+    return jsonify(data)
+
+
+def _dataset_for_type(dtype: str):
+    dtype = (dtype or "monthly").lower()
+    if dtype == "monthly":
+        return ("monthly", ["month", "total", "fuel_total", "other_total"], spend_by_month())
+    if dtype == "weekly":
+        return ("weekly", ["year_week", "total", "fuel_total", "other_total"], spend_by_week())
+    if dtype == "by_job":
+        return ("by_job", ["job_name", "total", "count"], spend_by_job())
+    if dtype == "by_category":
+        return ("by_category", ["category", "total", "count"], spend_by_category())
+    # default
+    return ("monthly", ["month", "total", "fuel_total", "other_total"], spend_by_month())
+
+
+@app.route("/reports/export.csv")
+def reports_export_csv():
+    dtype = request.args.get("type", "monthly")
+    name, headers, rows = _dataset_for_type(dtype)
+    output = io.StringIO()
+    w = csv.writer(output)
+    w.writerow(headers)
+    for row in rows:
+        w.writerow([row.get(h) for h in headers])
+    output.seek(0)
+    filename = f"{name}.csv"
+    return send_file(
+        io.BytesIO(output.getvalue().encode("utf-8")),
+        mimetype="text/csv",
+        as_attachment=True,
+        download_name=filename,
+    )
+
+
+@app.route("/reports/export.xlsx")
+def reports_export_xlsx():
+    dtype = request.args.get("type", "monthly")
+    name, headers, rows = _dataset_for_type(dtype)
+    if Workbook is None:
+        return "openpyxl not installed", 500
+    wb = Workbook()
+    ws = wb.active
+    ws.title = name
+    ws.append(headers)
+    for row in rows:
+        ws.append([row.get(h) for h in headers])
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return send_file(
+        buf,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name=f"{name}.xlsx",
+    )
+
+
+def _current_month_str() -> str:
+    return datetime.utcnow().strftime("%Y-%m")
+
+
+def _render_monthly_report_html(month: str) -> str:
+    # Prepare data
+    by_month = spend_by_month()
+    by_job = spend_by_job(month=month)
+    by_cat = spend_by_category(month=month)
+    items = items_for_month(month)
+    total = sum((r.get("total") or 0) for r in by_job)
+    return render_template(
+        "monthly_report.html",
+        month=month,
+        total=total,
+        monthly=by_month,
+        by_job=by_job,
+        by_category=by_cat,
+        items=items,
+    )
+
+
+@app.route("/reports/monthly.pdf")
+def reports_monthly_pdf():
+    if HTML is None:
+        return "WeasyPrint not installed", 500
+    month = request.args.get("month") or _current_month_str()
+    html = _render_monthly_report_html(month)
+    pdf = HTML(string=html).write_pdf()
+    return send_file(
+        io.BytesIO(pdf),
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=f"monthly_report_{month}.pdf",
+    )
+
+
+def _send_monthly_report_email(month: str) -> tuple[bool, str]:
+    host = os.getenv("SMTP_HOST")
+    port = int(os.getenv("SMTP_PORT", "587"))
+    user = os.getenv("SMTP_USER")
+    password = os.getenv("SMTP_PASS")
+    sender = os.getenv("EMAIL_FROM") or (user or "")
+    recipients = [e.strip() for e in (os.getenv("EMAIL_TO") or "").split(",") if e.strip()]
+    starttls = os.getenv("SMTP_STARTTLS", "1") == "1"
+    if not (host and sender and recipients):
+        return False, "Missing SMTP_HOST/EMAIL_FROM/EMAIL_TO"
+    if HTML is None:
+        return False, "WeasyPrint not installed"
+    html = _render_monthly_report_html(month)
+    pdf_bytes = HTML(string=html).write_pdf()
+    msg = EmailMessage()
+    msg["Subject"] = f"Monthly Report {month}"
+    msg["From"] = sender
+    msg["To"] = ", ".join(recipients)
+    msg.set_content(f"Attached: Monthly Report {month}")
+    msg.add_attachment(pdf_bytes, maintype="application", subtype="pdf", filename=f"monthly_report_{month}.pdf")
+    try:
+        with smtplib.SMTP(host, port) as smtp:
+            smtp.ehlo()
+            if starttls:
+                smtp.starttls()
+            if user and password:
+                smtp.login(user, password)
+            smtp.send_message(msg)
+        return True, "sent"
+    except Exception as e:
+        return False, str(e)
+
+
+@app.route("/reports/monthly/email")
+def reports_monthly_email():
+    month = request.args.get("month") or _current_month_str()
+    ok, msg = _send_monthly_report_email(month)
+    code = 200 if ok else 500
+    return {"ok": ok, "message": msg, "month": month}, code
+
+
+def _maybe_schedule_email():
+    if os.getenv("SCHEDULE_EMAIL", "0") != "1":
+        return
+    if BackgroundScheduler is None or CronTrigger is None:
+        return
+    # Only start one scheduler per process; users should run one worker to avoid duplicates
+    sched = BackgroundScheduler(timezone="UTC")
+    # Daily at 08:00 UTC by default; override with EMAIL_CRON (e.g., "0 8 * * *")
+    cron = os.getenv("EMAIL_CRON")
+    if cron:
+        try:
+            trigger = CronTrigger.from_crontab(cron)
+        except Exception:
+            trigger = CronTrigger(hour=8, minute=0)
+    else:
+        trigger = CronTrigger(hour=8, minute=0)
+
+    def _job():
+        try:
+            _send_monthly_report_email(_current_month_str())
+        except Exception:
+            pass
+
+    sched.add_job(_job, trigger, id="monthly_email", replace_existing=True)
+    sched.start()
+
+
+# Initialize scheduler if configured
+_maybe_schedule_email()
 
 
 def _schedule_ocr(image_path: Path, meta: dict | None = None) -> None:

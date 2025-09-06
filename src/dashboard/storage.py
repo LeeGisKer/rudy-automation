@@ -256,6 +256,115 @@ def spend_by_week(conn: Optional[sqlite3.Connection] = None) -> list[dict]:
             conn.close()
 
 
+def spend_by_job(
+    conn: Optional[sqlite3.Connection] = None, *, month: Optional[str] = None
+) -> list[dict]:
+    """Aggregate spend by job name.
+
+    Returns: [{job_name, total, count}] ordered by total desc.
+    If month is provided (YYYY-MM), restricts to that month by updated/created.
+    """
+    own = conn is None
+    if own:
+        conn = _connect()
+    assert conn is not None
+    try:
+        _init(conn)
+        where = ["total IS NOT NULL"]
+        params: list = []
+        if month:
+            where.append("strftime('%Y-%m', COALESCE(updated_at, created_at)) = ?")
+            params.append(month)
+        sql = f"""
+            SELECT job_name,
+                   ROUND(COALESCE(SUM(total), 0), 2) AS total,
+                   COUNT(1) AS count
+            FROM tickets
+            WHERE {' AND '.join(where)}
+            GROUP BY job_name
+            ORDER BY total DESC
+        """
+        cur = conn.execute(sql, params)
+        return [
+            {"job_name": r[0], "total": r[1], "count": r[2]}
+            for r in cur.fetchall()
+        ]
+    finally:
+        if own:
+            conn.close()
+
+
+def spend_by_category(
+    conn: Optional[sqlite3.Connection] = None, *, month: Optional[str] = None
+) -> list[dict]:
+    """Aggregate spend by category.
+
+    Returns: [{category, total, count}] ordered by total desc.
+    If month is provided (YYYY-MM), restricts to that month by updated/created.
+    """
+    own = conn is None
+    if own:
+        conn = _connect()
+    assert conn is not None
+    try:
+        _init(conn)
+        where = ["total IS NOT NULL"]
+        params: list = []
+        if month:
+            where.append("strftime('%Y-%m', COALESCE(updated_at, created_at)) = ?")
+            params.append(month)
+        sql = f"""
+            SELECT category,
+                   ROUND(COALESCE(SUM(total), 0), 2) AS total,
+                   COUNT(1) AS count
+            FROM tickets
+            WHERE {' AND '.join(where)}
+            GROUP BY category
+            ORDER BY total DESC
+        """
+        cur = conn.execute(sql, params)
+        return [
+            {"category": r[0], "total": r[1], "count": r[2]}
+            for r in cur.fetchall()
+        ]
+    finally:
+        if own:
+            conn.close()
+
+
+def items_for_month(month: str, conn: Optional[sqlite3.Connection] = None) -> list[dict]:
+    """Return ticket items for a specific month (YYYY-MM)."""
+    own = conn is None
+    if own:
+        conn = _connect()
+    assert conn is not None
+    try:
+        _init(conn)
+        cur = conn.execute(
+            """
+            SELECT id, original_name, job_name, total, category, created_at, updated_at
+            FROM tickets
+            WHERE total IS NOT NULL
+              AND strftime('%Y-%m', COALESCE(updated_at, created_at)) = ?
+            ORDER BY COALESCE(updated_at, created_at) DESC
+            """,
+            (month,),
+        )
+        return [
+            {
+                "id": r[0],
+                "original_name": r[1],
+                "job_name": r[2],
+                "total": r[3],
+                "category": r[4],
+                "created_at": r[5],
+                "updated_at": r[6],
+            }
+            for r in cur.fetchall()
+        ]
+    finally:
+        if own:
+            conn.close()
 def list_job_totals(conn: Optional[sqlite3.Connection] = None, *, only_with_values: bool = True) -> list[dict]:
     """List ticket records focusing on job_name and total.
 

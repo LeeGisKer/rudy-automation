@@ -6,7 +6,18 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 # Install Tesseract OCR without extra packages to keep image light for Pi
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-osd libglib2.0-0 \
+    && apt-get install -y --no-install-recommends \
+        tesseract-ocr \
+        tesseract-ocr-osd \
+        libglib2.0-0 \
+        libcairo2 \
+        libpango-1.0-0 \
+        libpangocairo-1.0-0 \
+        libpangoft2-1.0-0 \
+        libgdk-pixbuf2.0-0 \
+        libffi8 \
+        shared-mime-info \
+        fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory

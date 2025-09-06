@@ -1,0 +1,81 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Monthly Report {{ month }}</title>
+    <style>
+      body { font-family: Arial, sans-serif; font-size: 12px; }
+      h1, h2 { margin: 0.2em 0; }
+      table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+      th, td { border: 1px solid #ccc; padding: 6px; }
+      th { background: #f3f3f3; }
+      .small { color: #666; font-size: 11px; }
+      .totals { margin-top: 6px; }
+    </style>
+  </head>
+  <body>
+    <h1>Monthly Report</h1>
+    <div class="small">Month: {{ month }}</div>
+    <div class="totals"><strong>Total:</strong> {{ '%.2f'|format(total or 0) }}</div>
+
+    <h2>By Job</h2>
+    <table>
+      <thead>
+        <tr><th>Job Name</th><th>Total</th><th>Count</th></tr>
+      </thead>
+      <tbody>
+        {% for r in by_job %}
+        <tr>
+          <td>{{ r.job_name or 'Unassigned' }}</td>
+          <td>{{ '%.2f'|format(r.total or 0) }}</td>
+          <td>{{ r.count }}</td>
+        </tr>
+        {% endfor %}
+        {% if not by_job %}
+        <tr><td colspan="3" class="small">No data</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+
+    <h2>By Category</h2>
+    <table>
+      <thead>
+        <tr><th>Category</th><th>Total</th><th>Count</th></tr>
+      </thead>
+      <tbody>
+        {% for r in by_category %}
+        <tr>
+          <td>{{ r.category or 'uncategorized' }}</td>
+          <td>{{ '%.2f'|format(r.total or 0) }}</td>
+          <td>{{ r.count }}</td>
+        </tr>
+        {% endfor %}
+        {% if not by_category %}
+        <tr><td colspan="3" class="small">No data</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+
+    <h2>Items</h2>
+    <table>
+      <thead>
+        <tr><th>Original Name</th><th>Job</th><th>Category</th><th>Total</th><th>Updated</th></tr>
+      </thead>
+      <tbody>
+        {% for r in items %}
+        <tr>
+          <td>{{ r.original_name or r.id }}</td>
+          <td>{{ r.job_name or '' }}</td>
+          <td>{{ r.category or '' }}</td>
+          <td>{{ '%.2f'|format(r.total or 0) }}</td>
+          <td>{{ r.updated_at or r.created_at }}</td>
+        </tr>
+        {% endfor %}
+        {% if not items %}
+        <tr><td colspan="5" class="small">No items</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </body>
+</html>
+

@@ -4,3 +4,6 @@ pytesseract==0.3.13
 numpy==1.26.4
 opencv-python-headless==4.9.0.80
 gunicorn==22.0.0
+weasyprint==62.3
+APScheduler==3.10.4
+openpyxl==3.1.5

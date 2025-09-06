@@ -4,12 +4,26 @@
     <meta charset="utf-8">
     <title>Reports</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   </head>
   <body class="p-4">
     <div class="d-flex justify-content-between align-items-center">
       <h1 class="mb-4">Spending Reports</h1>
       <div class="d-flex gap-2">
         <a class="btn btn-outline-primary btn-sm" href="{{ url_for('share_new') }}" title="Create a temporary share link">Create Share Link</a>
+        <div class="btn-group">
+          <a class="btn btn-outline-success btn-sm" href="{{ url_for('reports_export_csv', type='monthly') }}">CSV (Monthly)</a>
+          <a class="btn btn-outline-success btn-sm" href="{{ url_for('reports_export_csv', type='weekly') }}">CSV (Weekly)</a>
+          <a class="btn btn-outline-success btn-sm" href="{{ url_for('reports_export_csv', type='by_job') }}">CSV (By Job)</a>
+          <a class="btn btn-outline-success btn-sm" href="{{ url_for('reports_export_csv', type='by_category') }}">CSV (By Category)</a>
+        </div>
+        <div class="btn-group">
+          <a class="btn btn-outline-success btn-sm" href="{{ url_for('reports_export_xlsx', type='monthly') }}">Excel (Monthly)</a>
+          <a class="btn btn-outline-success btn-sm" href="{{ url_for('reports_export_xlsx', type='weekly') }}">Excel (Weekly)</a>
+          <a class="btn btn-outline-success btn-sm" href="{{ url_for('reports_export_xlsx', type='by_job') }}">Excel (By Job)</a>
+          <a class="btn btn-outline-success btn-sm" href="{{ url_for('reports_export_xlsx', type='by_category') }}">Excel (By Category)</a>
+        </div>
+        <a class="btn btn-outline-danger btn-sm" href="{{ url_for('reports_monthly_pdf') }}">Download Monthly PDF</a>
         <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('index') }}">Back to Receipts</a>
       </div>
     </div>
@@ -67,5 +81,92 @@
         </tbody>
       </table>
     </div>
+
+    <h3 class="mt-4">Charts</h3>
+    <div class="row g-4">
+      <div class="col-lg-6">
+        <div class="card">
+          <div class="card-body">
+            <h5 class="card-title">Monthly Totals</h5>
+            <canvas id="chartMonthly" height="180"></canvas>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="card">
+          <div class="card-body">
+            <h5 class="card-title">Weekly Totals</h5>
+            <canvas id="chartWeekly" height="180"></canvas>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="card">
+          <div class="card-body">
+            <h5 class="card-title">Spend by Category (This Month)</h5>
+            <canvas id="chartCategory" height="180"></canvas>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="card">
+          <div class="card-body">
+            <h5 class="card-title">Top Jobs (This Month)</h5>
+            <canvas id="chartJob" height="180"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const monthly = {{ monthly | tojson }};
+        const weekly = {{ weekly | tojson }};
+        const now = new Date();
+        const monthStr = now.toISOString().slice(0,7);
+
+        function mkChart(ctx, config) { return new Chart(ctx, config); }
+
+        // Monthly bar
+        const mLabels = monthly.map(r => r.month);
+        const mTotals = monthly.map(r => r.total || 0);
+        mkChart(document.getElementById('chartMonthly'), {
+          type: 'bar',
+          data: { labels: mLabels, datasets: [{ label: 'Total', data: mTotals, backgroundColor: '#0d6efd66', borderColor: '#0d6efd' }]},
+          options: { responsive: true, scales: { y: { beginAtZero: true }}}
+        });
+
+        // Weekly line
+        const wLabels = weekly.map(r => r.year_week);
+        const wTotals = weekly.map(r => r.total || 0);
+        mkChart(document.getElementById('chartWeekly'), {
+          type: 'line',
+          data: { labels: wLabels, datasets: [{ label: 'Total', data: wTotals, fill: false, borderColor: '#198754', tension: 0.2 }]},
+          options: { responsive: true, scales: { y: { beginAtZero: true }}}
+        });
+
+        // Category doughnut (current month)
+        fetch(`{{ url_for('api_spend_by_category') }}?month=${monthStr}`).then(r => r.json()).then(rows => {
+          const labels = rows.map(r => r.category || 'uncategorized');
+          const data = rows.map(r => r.total || 0);
+          mkChart(document.getElementById('chartCategory'), {
+            type: 'doughnut',
+            data: { labels, datasets: [{ data, backgroundColor: ['#6f42c1','#fd7e14','#0dcaf0','#dc3545','#198754','#20c997','#0d6efd','#6610f2'] }]},
+            options: { responsive: true }
+          });
+        });
+
+        // Job bar (current month)
+        fetch(`{{ url_for('api_spend_by_job') }}?month=${monthStr}`).then(r => r.json()).then(rows => {
+          const labels = rows.map(r => r.job_name || 'Unassigned');
+          const data = rows.map(r => r.total || 0);
+          mkChart(document.getElementById('chartJob'), {
+            type: 'bar',
+            data: { labels, datasets: [{ label: 'Total', data, backgroundColor: '#ffc10766', borderColor: '#ffc107'}]},
+            options: { responsive: true, indexAxis: 'y', scales: { x: { beginAtZero: true }}}
+          });
+        });
+      })();
+    </script>
   </body>
   </html>
