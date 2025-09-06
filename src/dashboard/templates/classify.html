@@ -12,7 +12,7 @@
         <label class="form-label">Category</label>
         <select class="form-select" name="category">
           <option value="" {% if not data.category %}selected{% endif %}>— None —</option>
-          <option value="fuel" {% if data.category == 'fuel' %}selected{% endif %}>Fuel</option>
+          <option value="fuel" {% if data.category == 'fuel' %}selected{% endif %}>Gas</option>
         </select>
       </div>
       <div class="mb-3">
@@ -29,5 +29,22 @@
     </form>
     <h6>OCR text</h6>
     <pre style="white-space: pre-wrap">{{ data.raw_text }}</pre>
+    <script>
+      (function () {
+        var sel = document.querySelector('select[name="category"]');
+        var job = document.querySelector('input[name="job_name"]').closest('.mb-3');
+        function sync() {
+          var isFuel = (sel.value || '').toLowerCase() === 'fuel';
+          var jobInput = job.querySelector('input[name="job_name"]');
+          job.style.display = isFuel ? 'none' : '';
+          jobInput.disabled = isFuel;
+          if (isFuel) jobInput.value = '';
+        }
+        if (sel && job) {
+          sel.addEventListener('change', sync);
+          sync();
+        }
+      })();
+    </script>
   </body>
 </html>

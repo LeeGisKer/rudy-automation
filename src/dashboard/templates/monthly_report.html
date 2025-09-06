@@ -45,7 +45,7 @@
       <tbody>
         {% for r in by_category %}
         <tr>
-          <td>{{ r.category or 'uncategorized' }}</td>
+          <td>{{ 'Gas' if r.category == 'fuel' else (r.category or 'uncategorized') }}</td>
           <td>{{ '%.2f'|format(r.total or 0) }}</td>
           <td>{{ r.count }}</td>
         </tr>
@@ -66,7 +66,7 @@
         <tr>
           <td>{{ r.original_name or r.id }}</td>
           <td>{{ r.job_name or '' }}</td>
-          <td>{{ r.category or '' }}</td>
+          <td>{{ 'Gas' if r.category == 'fuel' else (r.category or '') }}</td>
           <td>{{ '%.2f'|format(r.total or 0) }}</td>
           <td>{{ r.updated_at or r.created_at }}</td>
         </tr>
@@ -78,4 +78,3 @@
     </table>
   </body>
 </html>
-

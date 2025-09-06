@@ -113,7 +113,8 @@ def index():
     for c in candidates:
         data = c["data"]
         processing = data.get("status") == "processing"
-        job_ok = bool(data.get("job_name"))
+        # Job name is not required for fuel receipts
+        job_ok = bool(data.get("job_name")) or (data.get("category") == "fuel")
         total_ok = data.get("total") is not None
         score = (
             0 if processing else 1,                 # prefer not processing
@@ -237,11 +238,15 @@ def classify(name: str):
         job_name = (request.form.get("job_name") or "").strip() or None
         total_str = (request.form.get("total") or "").strip()
         category_raw = (request.form.get("category") or "").strip().lower()
-        category = "fuel" if category_raw == "fuel" else None
+        category = "fuel" if category_raw in {"fuel", "gas", "gasoline", "petrol"} else None
         try:
             total_val = float(total_str.replace(",", "")) if total_str else None
         except ValueError:
             total_val = None
+
+        # If marked as fuel, ignore any provided job name
+        if category == "fuel":
+            job_name = None
 
         data["job_name"] = job_name
         data["total"] = total_val

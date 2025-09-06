@@ -35,9 +35,9 @@
           <div class="text-muted">Processing...</div>
         {% endif %}
         <p>Job Name: {{ f.data.job_name or 'N/A' }}</p>
-        <p>Category: {{ f.data.category or 'N/A' }}</p>
+        <p>Category: {{ (("Gas") if f.data.category == 'fuel' else f.data.category) or 'N/A' }}</p>
         <p>Total: {{ f.data.total if f.data.total is not none else 'N/A' }}</p>
-        {% set needs_fix = (not f.data.job_name) or (f.data.total is none) %}
+        {% set needs_fix = ((f.data.category != 'fuel') and (not f.data.job_name)) or (f.data.total is none) %}
         {% if needs_fix %}
           <div class="alert alert-warning p-2 mt-2">
             <div class="d-flex justify-content-between align-items-center">
@@ -54,7 +54,7 @@
               <div class="col-sm-3">
                 <select class="form-select form-select-sm" name="category">
                   <option value="" {% if not f.data.category %}selected{% endif %}>— Category —</option>
-                  <option value="fuel" {% if f.data.category == 'fuel' %}selected{% endif %}>Fuel</option>
+                  <option value="fuel" {% if f.data.category == 'fuel' %}selected{% endif %}>Gas</option>
                 </select>
               </div>
               <div class="col-sm-2">
@@ -75,7 +75,7 @@
             <div class="col-sm-3">
               <select class="form-select form-select-sm" name="category">
                 <option value="" {% if not f.data.category %}selected{% endif %}>— Category —</option>
-                <option value="fuel" {% if f.data.category == 'fuel' %}selected{% endif %}>Fuel</option>
+                <option value="fuel" {% if f.data.category == 'fuel' %}selected{% endif %}>Gas</option>
               </select>
             </div>
             <div class="col-sm-2">
@@ -129,5 +129,25 @@
     })();
   </script>
   {% endif %}
+  <script>
+    // Disable/hide Job Name inputs when category is fuel
+    (function () {
+      function updateJobField(selectEl) {
+        var form = selectEl.closest('form');
+        if (!form) return;
+        var job = form.querySelector('input[name="job_name"]');
+        if (!job) return;
+        var isFuel = (selectEl.value || '').toLowerCase() === 'fuel';
+        job.disabled = isFuel;
+        job.parentElement.style.display = isFuel ? 'none' : '';
+        if (isFuel) job.value = '';
+      }
+      document.querySelectorAll('select[name="category"]').forEach(function (sel) {
+        sel.addEventListener('change', function () { updateJobField(sel); });
+        // initialize on load
+        updateJobField(sel);
+      });
+    })();
+  </script>
   </body>
 </html>

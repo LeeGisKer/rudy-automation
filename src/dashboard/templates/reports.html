@@ -35,7 +35,7 @@
           <tr>
             <th>Month</th>
             <th class="text-end">Total</th>
-            <th class="text-end">Fuel</th>
+            <th class="text-end">Gas</th>
             <th class="text-end">Other</th>
           </tr>
         </thead>
@@ -62,7 +62,7 @@
           <tr>
             <th>Week</th>
             <th class="text-end">Total</th>
-            <th class="text-end">Fuel</th>
+            <th class="text-end">Gas</th>
             <th class="text-end">Other</th>
           </tr>
         </thead>
@@ -147,7 +147,10 @@
 
         // Category doughnut (current month)
         fetch(`{{ url_for('api_spend_by_category') }}?month=${monthStr}`).then(r => r.json()).then(rows => {
-          const labels = rows.map(r => r.category || 'uncategorized');
+          const labels = rows.map(r => {
+            const c = (r.category || 'uncategorized');
+            return c === 'fuel' ? 'Gas' : c;
+          });
           const data = rows.map(r => r.total || 0);
           mkChart(document.getElementById('chartCategory'), {
             type: 'doughnut',
