@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8">
@@ -10,7 +10,10 @@
   <body class="p-4">
     <div class="d-flex justify-content-between align-items-center">
       <h1 class="mb-3">Shared Receipts</h1>
-      <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('reports') }}">Back to Reports</a>
+      <div class="d-flex gap-2">
+        <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('reports') }}">Back to Reports</a>
+        <a class="btn btn-primary btn-sm" href="{{ url_for('index') }}#upload">Upload Receipts</a>
+      </div>
     </div>
 
     {% if expired %}
@@ -51,4 +54,3 @@
     {% endif %}
   </body>
 </html>
-

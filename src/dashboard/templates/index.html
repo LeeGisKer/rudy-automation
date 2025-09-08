@@ -4,14 +4,14 @@
     <meta charset="utf-8">
     <title>Receipt Dashboard</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   </head>
   <body class="p-4">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <h1 class="d-flex justify-content-between align-items-center">
       <span>Receipts</span>
       <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('reports') }}">View Reports</a>
     </h1>
-    <form action="/upload" method="post" enctype="multipart/form-data" class="mb-3">
+    <form id="upload" action="/upload" method="post" enctype="multipart/form-data" class="mb-3">
       <input type="file" name="receipt" required multiple>
       <button class="btn btn-primary" type="submit">Upload</button>
     </form>
@@ -152,3 +152,4 @@
   </script>
   </body>
 </html>
+
