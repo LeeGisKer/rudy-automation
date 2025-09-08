@@ -1,0 +1,42 @@
+/* Minimal, fast CSS to complement Bootstrap */
+:root {
+  --bg: #f8fafc;
+  --card-bg: #ffffff;
+  --text: #111827;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+}
+
+html, body { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+h1, h2, h3, h4 { color: var(--text); }
+
+.card { border-color: var(--border); background: var(--card-bg); }
+.table { border-color: var(--border); }
+.table thead th { background: #f3f4f6; }
+
+pre {
+  background: #0b1020;
+  color: #e5e7eb;
+  padding: 0.75rem;
+  border-radius: 6px;
+  overflow: auto;
+}
+
+/* Tighten small inline forms on index */
+form .form-control-sm, form .form-select-sm { min-height: 2rem; }
+
+.btn-primary { box-shadow: 0 1px 0 rgba(0,0,0,0.04); }
+
+/* Make details summary more obvious */
+details > summary { cursor: pointer; color: var(--muted); }
+details[open] > summary { color: var(--text); }
+
+/* Spacing helpers */
+.mb-0_5 { margin-bottom: .25rem; }
+.mt-0_5 { margin-top: .25rem; }
+

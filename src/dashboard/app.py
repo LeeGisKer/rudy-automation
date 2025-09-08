@@ -12,6 +12,7 @@ import os
 import json
 from uuid import uuid4
 from concurrent.futures import ThreadPoolExecutor
+from threading import Lock
 from datetime import datetime
 import io
 import csv
@@ -84,6 +85,26 @@ ALLOWED_EXT = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp", ".gif"
 OCR_ASYNC = os.getenv("OCR_ASYNC", "1") == "1"
 OCR_WORKERS = max(1, int(os.getenv("OCR_WORKERS", "2")))
 _EXECUTOR = ThreadPoolExecutor(max_workers=OCR_WORKERS) if OCR_ASYNC else None
+_INFLIGHT: set[str] = set()
+_INFLIGHT_LOCK = Lock()
+
+
+@app.after_request
+def _security_headers(resp):
+    """Add a few lightweight security headers suitable for a small app."""
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resp.headers.setdefault("X-Frame-Options", "DENY")
+    resp.headers.setdefault("Referrer-Policy", "no-referrer")
+    # Allow Bootstrap + Chart.js CDN and inline scripts used by templates
+    csp = (
+        "default-src 'self'; "
+        "img-src 'self' data:; "
+        "style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
+        "script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
+        "connect-src 'self'"
+    )
+    resp.headers.setdefault("Content-Security-Policy", csp)
+    return resp
 
 
 @app.route("/")
@@ -523,10 +544,16 @@ def _schedule_ocr(image_path: Path, meta: dict | None = None) -> None:
         placeholder.update({k: v for k, v in meta.items() if k in {"batch_id", "batch_seq", "batch_total", "original_name"}})
     json_path.write_text(json.dumps(placeholder, indent=2))
     assert _EXECUTOR is not None
+    key = str(image_path)
+    with _INFLIGHT_LOCK:
+        if key in _INFLIGHT:
+            return
+        _INFLIGHT.add(key)
     _EXECUTOR.submit(_process_and_write, image_path)
 
 
 def _process_and_write(image_path: Path) -> None:
+    key = str(image_path)
     try:
         data = extract_receipt(image_path)
         # Clear processing status on success
@@ -553,6 +580,9 @@ def _process_and_write(image_path: Path) -> None:
     except Exception as exc:
         error = {"status": "error", "error": str(exc), "file": image_path.name}
         image_path.with_suffix(".json").write_text(json.dumps(error, indent=2))
+    finally:
+        with _INFLIGHT_LOCK:
+            _INFLIGHT.discard(key)
 
 
 def _bootstrap_pending_jobs() -> None:
@@ -569,7 +599,11 @@ def _bootstrap_pending_jobs() -> None:
             except Exception:
                 continue
             if meta.get("status") == "processing":
-                # Re-enqueue if previous run crashed
+                # Re-enqueue if previous run crashed, but avoid duplicates in this process
+                with _INFLIGHT_LOCK:
+                    if str(img) in _INFLIGHT:
+                        continue
+                    _INFLIGHT.add(str(img))
                 _EXECUTOR.submit(_process_and_write, img)
 
 
