@@ -3,3 +3,28 @@ src/dashboard/uploads/*
 !src/dashboard/uploads/.gitkeep
 src/dashboard/tickets.db
 
+# Python caches and build artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv/
+venv/
+
+# Local environment and secrets
+.env
+.env.*
+*.env
+
+# Logs and temp files
+*.log
+logs/
+tmp_*
+
+# Office exports generated locally
+*.xlsx
+*.pdf
+

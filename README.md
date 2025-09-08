@@ -101,6 +101,17 @@ kubectl apply -f k8s/deployment.yaml
 
 The service exposes the dashboard on port 80 and forwards traffic to the Flask app on port 5000.
 
+### Background OCR worker (Redis + RQ)
+For robust, at-most-once background processing with retries, the app can use Redis + RQ.
+
+Using docker-compose (includes Redis and a worker):
+
+```bash
+docker compose up --build
+```
+
+Environment variable `REDIS_URL` enables the queue path; otherwise the app falls back to a local thread pool. The worker listens on the `ocr` queue and retries failed jobs with exponential backoff.
+
 ### Fuel logs and quotes
 Duplicate the CSV templates in `excel_templates/` to track fuel expenses and generate job quotes in Excel or Google Sheets.
 

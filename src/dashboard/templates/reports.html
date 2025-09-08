@@ -23,6 +23,7 @@
           <a class="btn btn-outline-success btn-sm" href="{{ url_for('reports_export_xlsx', type='weekly') }}">Excel (Weekly)</a>
           <a class="btn btn-outline-success btn-sm" href="{{ url_for('reports_export_xlsx', type='by_job') }}">Excel (By Job)</a>
           <a class="btn btn-outline-success btn-sm" href="{{ url_for('reports_export_xlsx', type='by_category') }}">Excel (By Category)</a>
+          <a class="btn btn-success btn-sm" href="{{ url_for('reports_export_full_xlsx') }}">Excel (Full)</a>
         </div>
         <a class="btn btn-outline-danger btn-sm" href="{{ url_for('reports_monthly_pdf') }}">Download Monthly PDF</a>
         <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('index') }}">Back to Receipts</a>

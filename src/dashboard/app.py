@@ -18,20 +18,19 @@ import io
 import csv
 from email.message import EmailMessage
 import smtplib
+
+# Optional Redis/RQ queue for OCR
 try:
-    from weasyprint import HTML
-except Exception:
-    HTML = None
-try:
-    from openpyxl import Workbook
-except Exception:
-    Workbook = None
-try:
-    from apscheduler.schedulers.background import BackgroundScheduler
-    from apscheduler.triggers.cron import CronTrigger
-except Exception:
-    BackgroundScheduler = None
-    CronTrigger = None
+    from redis import Redis  # type: ignore
+    from rq import Queue, Retry  # type: ignore
+    from rq.job import Job  # type: ignore
+    from rq.exceptions import NoSuchJobError  # type: ignore
+except Exception:  # pragma: no cover
+    Redis = None  # type: ignore
+    Queue = None  # type: ignore
+    Retry = None  # type: ignore
+    Job = None  # type: ignore
+    NoSuchJobError = Exception  # type: ignore
 
 # Allow importing modules from the parent src directory
 sys.path.append(str(Path(__file__).resolve().parents[1]))
@@ -52,6 +51,7 @@ try:
         spend_by_category,
         items_for_month,
     )
+    from .tasks import ocr_process
 except Exception:
     # When running as a script: fallback to local import
     from storage import (
@@ -68,6 +68,7 @@ except Exception:
         spend_by_category,
         items_for_month,
     )
+    from tasks import ocr_process
 
 app = Flask(__name__)
 
@@ -87,6 +88,16 @@ OCR_WORKERS = max(1, int(os.getenv("OCR_WORKERS", "2")))
 _EXECUTOR = ThreadPoolExecutor(max_workers=OCR_WORKERS) if OCR_ASYNC else None
 _INFLIGHT: set[str] = set()
 _INFLIGHT_LOCK = Lock()
+
+# RQ setup when REDIS_URL provided
+REDIS_URL = os.getenv("REDIS_URL")
+_RQ: Queue | None = None
+if REDIS_URL and Redis and Queue:  # type: ignore
+    try:
+        _RQ_CONN = Redis.from_url(REDIS_URL)  # type: ignore
+        _RQ = Queue("ocr", connection=_RQ_CONN)  # type: ignore
+    except Exception:
+        _RQ = None
 
 
 @app.after_request
@@ -400,7 +411,9 @@ def reports_export_csv():
 def reports_export_xlsx():
     dtype = request.args.get("type", "monthly")
     name, headers, rows = _dataset_for_type(dtype)
-    if Workbook is None:
+    try:
+        from openpyxl import Workbook  # type: ignore
+    except Exception:
         return "openpyxl not installed", 500
     wb = Workbook()
     ws = wb.active
@@ -408,6 +421,61 @@ def reports_export_xlsx():
     ws.append(headers)
     for row in rows:
         ws.append([row.get(h) for h in headers])
+
+    # Improve sheet: freeze headers
+    try:
+        ws.freeze_panes = "A2"
+    except Exception:
+        pass
+
+    # Add basic charts on both the data sheet and a dedicated chart sheet
+    try:
+        from openpyxl.chart import BarChart, LineChart, PieChart, Reference  # type: ignore
+        from openpyxl.styles import Font  # type: ignore
+        # Bold header row
+        try:
+            for c in range(1, len(headers) + 1):
+                ws.cell(row=1, column=c).font = Font(bold=True)
+        except Exception:
+            pass
+
+        chart_ws = wb.create_sheet(title=f"{name}_chart")
+        n = len(rows)
+        max_row = max(2, n + 1)  # ensure at least header+one row for chart frame
+
+        if dtype == "monthly":
+            data_ref = Reference(ws, min_col=2, min_row=1, max_col=min(4, len(headers)), max_row=max_row)
+            cats_ref = Reference(ws, min_col=1, min_row=2, max_row=max_row)
+            chart = BarChart(); chart.title = "Monthly Totals"; chart.y_axis.title = "Amount"; chart.x_axis.title = "Month"
+            chart.add_data(data_ref, titles_from_header=True); chart.set_categories(cats_ref)
+            chart1 = BarChart(); chart1.title = chart.title; chart1.y_axis.title = chart.y_axis.title; chart1.x_axis.title = chart.x_axis.title
+            chart1.add_data(data_ref, titles_from_header=True); chart1.set_categories(cats_ref)
+            ws.add_chart(chart1, "F2"); chart_ws.add_chart(chart, "A1")
+        elif dtype == "weekly":
+            data_ref = Reference(ws, min_col=2, min_row=1, max_col=min(4, len(headers)), max_row=max_row)
+            cats_ref = Reference(ws, min_col=1, min_row=2, max_row=max_row)
+            chart = LineChart(); chart.title = "Weekly Totals"; chart.y_axis.title = "Amount"; chart.x_axis.title = "Week"
+            chart.add_data(data_ref, titles_from_header=True); chart.set_categories(cats_ref)
+            chart1 = LineChart(); chart1.title = chart.title; chart1.y_axis.title = chart.y_axis.title; chart1.x_axis.title = chart.x_axis.title
+            chart1.add_data(data_ref, titles_from_header=True); chart1.set_categories(cats_ref)
+            ws.add_chart(chart1, "F2"); chart_ws.add_chart(chart, "A1")
+        elif dtype == "by_job":
+            max_col = min(3, len(headers))
+            data_ref = Reference(ws, min_col=2, min_row=1, max_col=max_col, max_row=max_row)
+            cats_ref = Reference(ws, min_col=1, min_row=2, max_row=max_row)
+            chart = BarChart(); chart.title = "Spend by Job"; chart.y_axis.title = "Amount / Count"; chart.x_axis.title = "Job"
+            chart.add_data(data_ref, titles_from_header=True); chart.set_categories(cats_ref)
+            chart1 = BarChart(); chart1.title = chart.title; chart1.y_axis.title = chart.y_axis.title; chart1.x_axis.title = chart.x_axis.title
+            chart1.add_data(data_ref, titles_from_header=True); chart1.set_categories(cats_ref)
+            ws.add_chart(chart1, "F2"); chart_ws.add_chart(chart, "A1")
+        elif dtype == "by_category":
+            data_ref = Reference(ws, min_col=2, min_row=1, max_col=2, max_row=max_row)
+            cats_ref = Reference(ws, min_col=1, min_row=2, max_row=max_row)
+            pie = PieChart(); pie.title = "Spend by Category"; pie.add_data(data_ref, titles_from_header=True); pie.set_categories(cats_ref)
+            pie1 = PieChart(); pie1.title = pie.title; pie1.add_data(data_ref, titles_from_header=True); pie1.set_categories(cats_ref)
+            ws.add_chart(pie1, "F2"); chart_ws.add_chart(pie, "A1")
+    except Exception:
+        pass
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
@@ -416,6 +484,101 @@ def reports_export_xlsx():
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         as_attachment=True,
         download_name=f"{name}.xlsx",
+    )
+
+
+@app.route("/reports/export_full.xlsx")
+def reports_export_full_xlsx():
+    """Export a single workbook containing all datasets and a Dashboard sheet with charts."""
+    # Gather data
+    monthly_rows = spend_by_month()
+    weekly_rows = spend_by_week()
+    by_job_rows = spend_by_job()
+    by_cat_rows = spend_by_category()
+
+    try:
+        from openpyxl import Workbook  # type: ignore
+        from openpyxl.chart import BarChart, LineChart, PieChart, Reference  # type: ignore
+        from openpyxl.styles import Font  # type: ignore
+    except Exception:
+        return "openpyxl not installed", 500
+
+    wb = Workbook()
+
+    def add_sheet(name: str, headers: list[str], rows: list[dict]):
+        ws = wb.create_sheet(title=name)
+        ws.append(headers)
+        for r in rows:
+            ws.append([r.get(h) for h in headers])
+        try:
+            ws.freeze_panes = "A2"
+            for c in range(1, len(headers) + 1):
+                ws.cell(row=1, column=c).font = Font(bold=True)
+        except Exception:
+            pass
+        return ws
+
+    # Remove default first sheet and rebuild in clear order
+    try:
+        del wb[wb.active.title]
+    except Exception:
+        pass
+
+    ws_monthly = add_sheet("monthly", ["month", "total", "fuel_total", "other_total"], monthly_rows)
+    ws_weekly = add_sheet("weekly", ["year_week", "total", "fuel_total", "other_total"], weekly_rows)
+    ws_job = add_sheet("by_job", ["job_name", "total", "count"], by_job_rows)
+    ws_cat = add_sheet("by_category", ["category", "total", "count"], by_cat_rows)
+
+    dash = wb.create_sheet(title="Dashboard")
+    try:
+        dash["A1"] = "Dashboard"
+        dash["A1"].font = Font(bold=True, size=14)
+    except Exception:
+        pass
+
+    # Charts: always add chart frames; references include at least header+one row
+    try:
+        # Monthly chart (bar) at A3
+        n = len(monthly_rows); max_row = max(2, n + 1)
+        data_ref = Reference(ws_monthly, min_col=2, min_row=1, max_col=4, max_row=max_row)
+        cats_ref = Reference(ws_monthly, min_col=1, min_row=2, max_row=max_row)
+        c = BarChart(); c.title = "Monthly Totals"; c.y_axis.title = "Amount"; c.x_axis.title = "Month"; c.width = 22; c.height = 13
+        c.add_data(data_ref, titles_from_header=True); c.set_categories(cats_ref)
+        dash.add_chart(c, "A3")
+
+        # Weekly chart (line) at A22
+        n = len(weekly_rows); max_row = max(2, n + 1)
+        data_ref = Reference(ws_weekly, min_col=2, min_row=1, max_col=4, max_row=max_row)
+        cats_ref = Reference(ws_weekly, min_col=1, min_row=2, max_row=max_row)
+        c = LineChart(); c.title = "Weekly Totals"; c.y_axis.title = "Amount"; c.x_axis.title = "Week"; c.width = 22; c.height = 13
+        c.add_data(data_ref, titles_from_header=True); c.set_categories(cats_ref)
+        dash.add_chart(c, "A22")
+
+        # Category pie at H3
+        n = len(by_cat_rows); max_row = max(2, n + 1)
+        data_ref = Reference(ws_cat, min_col=2, min_row=1, max_col=2, max_row=max_row)
+        cats_ref = Reference(ws_cat, min_col=1, min_row=2, max_row=max_row)
+        p = PieChart(); p.title = "Spend by Category"; p.add_data(data_ref, titles_from_header=True); p.set_categories(cats_ref); p.width = 18; p.height = 12
+        dash.add_chart(p, "H3")
+
+        # Top jobs bar at H22 (limit to top 10 rows)
+        n = len(by_job_rows); n10 = min(n, 10); max_rows = max(2, n10 + 1)
+        data_ref = Reference(ws_job, min_col=2, min_row=1, max_col=3, max_row=max_rows)
+        cats_ref = Reference(ws_job, min_col=1, min_row=2, max_row=max_rows)
+        c = BarChart(); c.type = "bar"; c.title = "Top Jobs (by Total)"; c.y_axis.title = "Job"; c.x_axis.title = "Amount / Count"; c.width = 22; c.height = 13
+        c.add_data(data_ref, titles_from_header=True); c.set_categories(cats_ref)
+        dash.add_chart(c, "H22")
+    except Exception:
+        pass
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return send_file(
+        buf,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name="full_report.xlsx",
     )
 
 
@@ -443,7 +606,9 @@ def _render_monthly_report_html(month: str) -> str:
 
 @app.route("/reports/monthly.pdf")
 def reports_monthly_pdf():
-    if HTML is None:
+    try:
+        from weasyprint import HTML  # type: ignore
+    except Exception:
         return "WeasyPrint not installed", 500
     month = request.args.get("month") or _current_month_str()
     html = _render_monthly_report_html(month)
@@ -466,7 +631,9 @@ def _send_monthly_report_email(month: str) -> tuple[bool, str]:
     starttls = os.getenv("SMTP_STARTTLS", "1") == "1"
     if not (host and sender and recipients):
         return False, "Missing SMTP_HOST/EMAIL_FROM/EMAIL_TO"
-    if HTML is None:
+    try:
+        from weasyprint import HTML  # type: ignore
+    except Exception:
         return False, "WeasyPrint not installed"
     html = _render_monthly_report_html(month)
     pdf_bytes = HTML(string=html).write_pdf()
@@ -500,7 +667,10 @@ def reports_monthly_email():
 def _maybe_schedule_email():
     if os.getenv("SCHEDULE_EMAIL", "0") != "1":
         return
-    if BackgroundScheduler is None or CronTrigger is None:
+    try:
+        from apscheduler.schedulers.background import BackgroundScheduler  # type: ignore
+        from apscheduler.triggers.cron import CronTrigger  # type: ignore
+    except Exception:
         return
     # Only start one scheduler per process; users should run one worker to avoid duplicates
     sched = BackgroundScheduler(timezone="UTC")
@@ -543,6 +713,36 @@ def _schedule_ocr(image_path: Path, meta: dict | None = None) -> None:
     if meta:
         placeholder.update({k: v for k, v in meta.items() if k in {"batch_id", "batch_seq", "batch_total", "original_name"}})
     json_path.write_text(json.dumps(placeholder, indent=2))
+
+    # Prefer Redis/RQ if configured
+    if _RQ is not None:
+        job_id = f"ocr:{image_path.name}"
+        try:
+            j = Job.fetch(job_id, connection=_RQ.connection)  # type: ignore
+            status = j.get_status(refresh=True)
+            if status in ("queued", "started", "deferred"):
+                return
+        except NoSuchJobError:
+            pass
+        except Exception:
+            pass
+        # Enqueue with retries and timeout
+        try:
+            _RQ.enqueue(
+                ocr_process,
+                str(image_path),
+                job_id=job_id,
+                retry=Retry(max=3, interval=[10, 60, 180]),  # type: ignore
+                job_timeout=int(os.getenv("OCR_JOB_TIMEOUT", "600")),
+                result_ttl=int(os.getenv("OCR_RESULT_TTL", "86400")),
+                failure_ttl=int(os.getenv("OCR_FAILURE_TTL", "604800")),
+            )
+            return
+        except Exception:
+            # Fall back to local thread if enqueue fails
+            pass
+
+    # Fallback: local thread pool
     assert _EXECUTOR is not None
     key = str(image_path)
     with _INFLIGHT_LOCK:
@@ -587,6 +787,43 @@ def _process_and_write(image_path: Path) -> None:
 
 def _bootstrap_pending_jobs() -> None:
     """On each index view, (re)schedule any images missing results."""
+    # RQ mode: ensure missing/abandoned jobs are enqueued
+    if _RQ is not None:
+        for img in UPLOAD_DIR.iterdir():
+            if img.is_file() and img.suffix.lower() in ALLOWED_EXT:
+                jpath = img.with_suffix(".json")
+                if not jpath.exists():
+                    _schedule_ocr(img)
+                    continue
+                try:
+                    meta = json.loads(jpath.read_text())
+                except Exception:
+                    continue
+                if meta.get("status") == "processing":
+                    job_id = f"ocr:{img.name}"
+                    try:
+                        j = Job.fetch(job_id, connection=_RQ.connection)  # type: ignore
+                        status = j.get_status(refresh=True)
+                        if status in ("queued", "started", "deferred"):
+                            continue
+                    except NoSuchJobError:
+                        pass
+                    except Exception:
+                        pass
+                    # (Re)enqueue
+                    try:
+                        _RQ.enqueue(
+                            ocr_process,
+                            str(img),
+                            job_id=job_id,
+                            retry=Retry(max=3, interval=[10, 60, 180]),  # type: ignore
+                            job_timeout=int(os.getenv("OCR_JOB_TIMEOUT", "600")),
+                        )
+                    except Exception:
+                        pass
+        return
+
+    # Thread fallback
     assert _EXECUTOR is not None
     for img in UPLOAD_DIR.iterdir():
         if img.is_file() and img.suffix.lower() in ALLOWED_EXT:
